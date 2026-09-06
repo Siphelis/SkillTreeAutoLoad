@@ -1,0 +1,62 @@
+if GetLocale() ~= "frFR" then return end
+
+local L = SkillTreeAutoLoad.L
+
+L.BTN_ACTIVATE = "Activer"
+L.BTN_PANEL_MENU = "..."
+L.MENU_NEW_SAVE = "Nouvelle sauvegarde"
+L.MENU_NEW_GROUP = "Nouveau groupe"
+L.UNGROUPED = "Sans catégorie"
+L.EMPTY_LIST = "Aucune sauvegarde. Utilisez le menu '...' pour enregistrer l'état actuel de l'arbre."
+
+L.ROW_ACTIVE = "Actif"
+L.ROW_READ_FAILED = "Lecture impossible"
+L.ROW_COST = "%d nœud(s) - %s Soul Ashes"
+
+L.TOOLTIP_READ_FAILED = "Lecture de l'arbre impossible."
+L.TOOLTIP_COST = "Coût pour activer : %s Soul Ashes"
+L.TOOLTIP_MISSING = "Il vous manque %s Soul Ashes"
+
+L.PROMPT_NEW_SAVE = "Nom de la nouvelle sauvegarde :"
+L.PROMPT_NEW_GROUP = "Nom du nouveau groupe :"
+L.PROMPT_RENAME = "Nouveau nom :"
+L.PROMPT_RENAME_GROUP = "Nouveau nom du groupe :"
+L.POPUP_OK = "OK"
+L.POPUP_CANCEL = "Annuler"
+L.POPUP_YES = "Oui"
+L.POPUP_NO = "Non"
+
+L.MENU_RENAME = "Renommer"
+L.MENU_MOVE = "Déplacer vers un groupe"
+L.MENU_UPDATE = "Mettre à jour (état actuel)"
+L.MENU_DELETE = "Supprimer"
+L.MENU_RENAME_GROUP = "Renommer le groupe"
+L.MENU_DELETE_GROUP = "Supprimer le groupe"
+
+L.CONFIRM_DELETE_SAVE = "Supprimer la sauvegarde '%s' ?"
+L.CONFIRM_DELETE_GROUP = "Supprimer le groupe '%s' ? Ses sauvegardes repasseront dans '%s'."
+
+L.DEFAULT_SAVE_NAME = "Sauvegarde sans nom"
+
+L.MSG_ALREADY_ACTIVE = "'%s' est déjà entièrement active."
+L.MSG_APPLIED = "'%s' appliquée : %d nœud(s), %s Soul Ashes dépensées. Cliquez sur 'Apply Changes' pour valider."
+L.MSG_READ_FAILED = "Lecture de l'arbre impossible."
+L.MSG_ACTIVATION_FAILED = "Activation impossible : %s"
+L.MSG_CAPTURE_FAILED = "Capture impossible : %s"
+L.MSG_UPDATE_FAILED = "Mise à jour impossible : %s"
+L.MSG_MULTICHOICE = "Nœud à choix multiple détecté : il sera ignoré par les sauvegardes."
+L.MSG_NO_PROJECTEBONHOLD = "ProjectEbonhold introuvable : le panneau ne sera pas affiché."
+L.MSG_NO_SENDTOSERVER = "ProjectEbonhold.sendToServer absent : le pont serveur est inactif."
+L.MSG_NO_LOADOUT_ID = "Identité du loadout inconnue : ouvrez l'arbre une fois avant d'activer une sauvegarde."
+L.MSG_MIGRATED = "Sauvegardes de %s reprises sur le compte : %d importée(s), %d déjà présente(s)."
+
+L.ERR_NO_DATABASE = "TalentDatabase indisponible"
+L.ERR_TREE_NOT_READY = "arbre non initialisé"
+L.ERR_NO_SETTER = "UpdateTotalSoulPoints indisponible"
+L.ERR_READ_TREE = "lecture de l'arbre impossible"
+L.ERR_READ_BALANCE = "solde illisible"
+L.ERR_ENCODE = "encodage impossible"
+L.ERR_NO_IMPORT_BUTTON = "bouton d'import introuvable"
+L.ERR_NO_IMPORT_POPUP = "fenêtre d'import indisponible"
+L.ERR_REREAD_TREE = "relecture de l'arbre impossible"
+L.ERR_MISMATCH = "l'arbre ne correspond pas à la cible après import"

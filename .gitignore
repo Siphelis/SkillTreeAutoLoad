@@ -1,0 +1,16 @@
+# Fichiers de travail des scripts gadd / gcommit
+DIFF
+.gcommit_context
+
+# Sauvegardes
+*.bak
+*.bak.*
+*.old
+*~
+
+# Archives produites localement (la Release est construite par l'Action)
+*.zip
+
+# Windows
+Thumbs.db
+desktop.ini

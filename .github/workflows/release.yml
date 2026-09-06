@@ -1,0 +1,99 @@
+name: Release
+
+# Declenchee par le tag pousse par gprod (v1.5.0, v1.6.0, ...).
+# gprod a deja retire le suffixe de build du .toc et cree le tag annote :
+# cette Action ne fait que verifier, empaqueter et publier.
+on:
+  push:
+    tags:
+      - "v*"
+
+# Necessaire pour que `gh release create` puisse ecrire la Release.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Empaqueter et publier
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
+
+      - name: Localiser l'addon et lire sa version
+        id: addon
+        run: |
+          set -euo pipefail
+
+          # Meme regle de detection que gadd et gprod : les dossiers a la racine
+          # qui contiennent un .toc. Le nom du dossier n'est donc jamais code en dur.
+          dirs=()
+          for d in */; do
+            d="${d%/}"
+            if compgen -G "$d/*.toc" > /dev/null; then
+              dirs+=("$d")
+            fi
+          done
+
+          if [ "${#dirs[@]}" -ne 1 ]; then
+            echo "::error::Un seul dossier contenant un .toc est attendu, trouve : ${dirs[*]:-aucun}"
+            exit 1
+          fi
+
+          addon="${dirs[0]}"
+          toc="$(compgen -G "$addon/*.toc" | head -n 1)"
+          version="$(sed -n 's/^##[[:space:]]*Version:[[:space:]]*//p' "$toc" \
+            | head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//')"
+
+          if [ -z "$version" ]; then
+            echo "::error::Ligne '## Version:' introuvable dans $toc"
+            exit 1
+          fi
+
+          echo "name=$addon"       >> "$GITHUB_OUTPUT"
+          echo "version=$version"  >> "$GITHUB_OUTPUT"
+          echo "Addon : $addon (version $version)"
+
+      - name: Verifier que le tag correspond au .toc
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          toc_version="${{ steps.addon.outputs.version }}"
+
+          if [ "$tag_version" != "$toc_version" ]; then
+            echo "::error::Le tag $GITHUB_REF_NAME annonce $tag_version, mais le .toc porte $toc_version."
+            exit 1
+          fi
+
+      - name: Construire l'archive
+        id: package
+        run: |
+          set -euo pipefail
+          addon="${{ steps.addon.outputs.name }}"
+          archive="${addon}-${GITHUB_REF_NAME}.zip"
+
+          # Le zip contient le dossier de l'addon a sa racine : le joueur
+          # l'extrait directement dans Interface/AddOns.
+          mkdir -p build
+          cp -R "$addon" build/
+
+          # La licence voyage avec l'addon, pas seulement avec le depot.
+          if [ -f LICENSE.md ]; then
+            cp LICENSE.md "build/$addon/"
+          fi
+
+          ( cd build && zip -r -X "../$archive" "$addon" )
+
+          echo "file=$archive" >> "$GITHUB_OUTPUT"
+          unzip -l "$archive"
+
+      - name: Publier la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --title "${{ steps.addon.outputs.name }} $GITHUB_REF_NAME" \
+            --generate-notes \
+            "${{ steps.package.outputs.file }}"
