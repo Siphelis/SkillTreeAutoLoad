@@ -6,6 +6,26 @@ local Colorize = NS.Colorize
 local Menus = {}
 NS.Menus = Menus
 
+-- Un nom se lit dans une liste : on retire les bords, les codes couleur colles
+-- depuis un chat et les caracteres de controle, puis on refuse ce qui n'en laisse
+-- rien. Sans ce filtre, une saisie faite d'espaces cree une ligne invisible que
+-- le joueur ne peut plus ni retrouver ni renommer.
+local function CleanName(raw)
+    if type(raw) ~= "string" then return nil end
+
+    local name = raw:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    name = name:gsub("[%c|]", " "):gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" then return nil end
+
+    return name
+end
+
+local function CountNodes(nodeRanks)
+    local count = 0
+    for _ in pairs(nodeRanks or {}) do count = count + 1 end
+    return count
+end
+
 StaticPopupDialogs["STAL_INPUT_TEXT"] = {
     text = "%s",
     button1 = L.POPUP_OK,
@@ -90,8 +110,12 @@ function Menus.ShowPanelMenu(anchor)
         level = level or 1
 
         AddButton(level, L.MENU_NEW_SAVE, function()
-            Menus.PromptText(L.PROMPT_NEW_SAVE, nil, function(name)
-                if not name or name == "" then return end
+            Menus.PromptText(L.PROMPT_NEW_SAVE, nil, function(raw)
+                local name = CleanName(raw)
+                if not name then
+                    NS.LogWarn(L.MSG_INVALID_NAME)
+                    return
+                end
 
                 local nodeRanks, err = NS.Core.CaptureTreeState()
                 if not nodeRanks then
@@ -105,8 +129,12 @@ function Menus.ShowPanelMenu(anchor)
         end)
 
         AddButton(level, L.MENU_NEW_GROUP, function()
-            Menus.PromptText(L.PROMPT_NEW_GROUP, nil, function(name)
-                if not name or name == "" then return end
+            Menus.PromptText(L.PROMPT_NEW_GROUP, nil, function(raw)
+                local name = CleanName(raw)
+                if not name then
+                    NS.LogWarn(L.MSG_INVALID_NAME)
+                    return
+                end
                 NS.Data.CreateGroup(name)
                 NS.Data.Persist()
             end)
@@ -125,23 +153,45 @@ function Menus.ShowSaveMenu(saveId, anchor)
         if level == 1 then
             AddButton(level, L.MENU_RENAME, function()
                 local save = NS.Data.GetSave(saveId)
-                Menus.PromptText(L.PROMPT_RENAME, save and save.name, function(newName)
-                    if newName and newName ~= "" and NS.Data.RenameSave(saveId, newName) then
-                        NS.Data.Persist()
+                Menus.PromptText(L.PROMPT_RENAME, save and save.name, function(raw)
+                    local newName = CleanName(raw)
+                    if not newName then
+                        NS.LogWarn(L.MSG_INVALID_NAME)
+                        return
                     end
+                    if NS.Data.RenameSave(saveId, newName) then NS.Data.Persist() end
                 end)
             end)
 
             AddButton(level, L.MENU_MOVE, nil, true, "MOVE")
 
             AddButton(level, L.MENU_UPDATE, function()
+                local save = NS.Data.GetSave(saveId)
+                if not save then return end
+
                 local nodeRanks, err = NS.Core.CaptureTreeState()
                 if not nodeRanks then
                     NS.LogError(string.format(L.MSG_UPDATE_FAILED, tostring(err)))
                     return
                 end
-                if NS.Data.UpdateSaveContent(saveId, nodeRanks) then
-                    NS.Data.Persist()
+
+                local function apply()
+                    if NS.Data.UpdateSaveContent(saveId, nodeRanks) then
+                        NS.Data.Persist()
+                    end
+                end
+
+                -- Une save ne retrecit pas par accident. Le ReloadUI qui suit
+                -- grave le resultat sur le disque : si la capture contient moins
+                -- que ce qu'elle remplace, c'est au joueur de le confirmer.
+                local newCount = CountNodes(nodeRanks)
+                local oldCount = CountNodes(save.nodeRanks)
+                if newCount < oldCount then
+                    NS.LogWarn(string.format(L.MSG_UPDATE_SHRINKS, newCount, oldCount))
+                    Menus.Confirm(string.format(L.CONFIRM_SHRINK_SAVE,
+                        save.name, newCount, oldCount), apply)
+                else
+                    apply()
                 end
             end)
 
@@ -180,10 +230,13 @@ function Menus.ShowGroupMenu(groupId, anchor)
 
         AddButton(level, L.MENU_RENAME_GROUP, function()
             local group = NS.Data.GetGroup(groupId)
-            Menus.PromptText(L.PROMPT_RENAME_GROUP, group and group.name, function(newName)
-                if newName and newName ~= "" and NS.Data.RenameGroup(groupId, newName) then
-                    NS.Data.Persist()
+            Menus.PromptText(L.PROMPT_RENAME_GROUP, group and group.name, function(raw)
+                local newName = CleanName(raw)
+                if not newName then
+                    NS.LogWarn(L.MSG_INVALID_NAME)
+                    return
                 end
+                if NS.Data.RenameGroup(groupId, newName) then NS.Data.Persist() end
             end)
         end)
 

@@ -8,12 +8,20 @@ local Colorize = NS.Colorize
 local UI = {}
 NS.UI = UI
 
-local PANEL_WIDTH = 230
+local PANEL_WIDTH = 275
 local ROW_HEIGHT = 54
 local ROW_SPACING = 3
 local GROUP_HEADER_HEIGHT = 22
 local SCROLL_MARGIN_RIGHT = 30
 local SCROLL_MARGIN_BOTTOM = 14
+local TOGGLE_WIDTH = 26
+local TOGGLE_HEIGHT = 16
+local TOGGLE_LABEL_WIDTH = 62
+
+-- La ligne est ancree par ses deux bords, sa largeur n'existe donc qu'une fois le
+-- panneau dispose. La jauge, elle, doit connaitre sa largeur des le premier dessin :
+-- on la derive des constantes plutot que de lire une geometrie pas encore calculee.
+local ROW_WIDTH = PANEL_WIDTH - 12 - SCROLL_MARGIN_RIGHT - 4
 
 local panel, scrollChild, emptyText
 local headerPool, rowPool = {}, {}
@@ -25,7 +33,8 @@ local function ActivateSave(saveId)
     if not save then return end
 
     NS.Core.InvalidateSnapshot()
-    local totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks)
+    local snapshot = NS.Core.GetTreeSnapshot()
+    local totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
     if not actions then
         NS.LogError(L.MSG_READ_FAILED)
         return
@@ -35,14 +44,41 @@ local function ActivateSave(saveId)
         return
     end
 
-    local cost, err = NS.Core.ApplyBuild(save.nodeRanks)
+    -- Le plan progressif est recalcule au clic, jamais repris de la liste : entre le
+    -- dernier rafraichissement et maintenant, le solde a pu bouger.
+    local targets, touched, partial = save.nodeRanks, #actions, false
+
+    if save.progressive then
+        local available = NS.Core.GetAvailableSoulAshes() or 0
+        local chosen, _, count =
+            NS.Plan.ComputeProgressive(save.nodeRanks, snapshot, available)
+
+        if not chosen then
+            NS.LogError(string.format(L.MSG_ACTIVATION_FAILED, L.ERR_NO_GRAPH))
+            return
+        end
+        if count == 0 then
+            NS.LogWarn(string.format(L.MSG_NOTHING_AFFORDABLE, save.name))
+            return
+        end
+
+        targets, touched, partial = chosen, count, count < #actions
+    end
+
+    local cost, err = NS.Core.ApplyBuild(targets)
     if not cost then
         NS.LogError(string.format(L.MSG_ACTIVATION_FAILED, tostring(err)))
         UI.RefreshList()
         return
     end
 
-    Log(Colorize(COLOR.SUCCESS, string.format(L.MSG_APPLIED, save.name, #actions, FormatCost(cost))))
+    if partial then
+        Log(Colorize(COLOR.SUCCESS, string.format(L.MSG_APPLIED_PARTIAL,
+            save.name, touched, FormatCost(cost), #actions - touched)))
+    else
+        Log(Colorize(COLOR.SUCCESS, string.format(L.MSG_APPLIED,
+            save.name, touched, FormatCost(cost))))
+    end
     UI.RefreshList()
 end
 
@@ -50,6 +86,10 @@ local function ShowRowTooltip(self)
     local row = self.row or self
     local save = row.saveId and NS.Data.GetSave(row.saveId)
     if not save then return end
+
+    -- Les deux ensembles ont ete calcules par le dernier rafraichissement, qui rejoue
+    -- des que le solde bouge : les redessiner ici suffit, sans rien recalculer.
+    NS.Overlay.Show(row.missing, row.affordable)
 
     local anchor = (NS.Data.GetPanelSide() == "LEFT") and "ANCHOR_RIGHT" or "ANCHOR_LEFT"
     GameTooltip:SetOwner(row, anchor)
@@ -61,6 +101,13 @@ local function ShowRowTooltip(self)
     elseif #actions == 0 then
         GameTooltip:AddLine(L.ROW_ACTIVE, 0.25, 1, 0.25)
     else
+        local ownedCost, saveCost, ownedNodes, totalNodes =
+            NS.Plan.ComputeProgress(save.nodeRanks, NS.Core.GetTreeSnapshot())
+        if ownedCost then
+            GameTooltip:AddLine(string.format(L.TOOLTIP_PROGRESS, ownedNodes, totalNodes,
+                FormatCost(ownedCost), FormatCost(saveCost)), 0.8, 0.8, 0.8)
+        end
+
         GameTooltip:AddLine(string.format(L.TOOLTIP_COST, FormatCost(totalCost)), 1, 0.82, 0)
 
         local available = NS.Core.GetAvailableSoulAshes()
@@ -68,13 +115,50 @@ local function ShowRowTooltip(self)
             GameTooltip:AddLine(string.format(L.TOOLTIP_MISSING, FormatCost(totalCost - available)),
                 1, 0.3, 0.3)
         end
+
+        -- La legende n'a de sens qu'en progressif : c'est le seul cas ou l'arbre
+        -- porte deux couleurs.
+        if row.affordable then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(L.TOOLTIP_LEGEND_NOW, 0.3, 1, 0.3)
+            GameTooltip:AddLine(L.TOOLTIP_LEGEND_LATER, 1, 0.65, 0.1)
+        end
     end
 
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(save.progressive and L.TOOLTIP_MODE_PROGRESSIVE or L.TOOLTIP_MODE_STRICT,
+        0.6, 0.6, 0.6, true)
+
     GameTooltip:Show()
+
+    -- Le client habille GameTooltip d'un fond translucide : pose par-dessus la liste
+    -- des saves, le texte devient illisible. On repose l'opacite apres Show, pas
+    -- avant : c'est Show qui declenche l'habillage qu'il faut recouvrir.
+    if GameTooltip.SetBackdropColor then
+        GameTooltip:SetBackdropColor(0, 0, 0, 1)
+    end
 end
 
 local function HideRowTooltip()
     GameTooltip:Hide()
+    NS.Overlay.Hide()
+end
+
+-- Le mode se bascule en pleine partie : pas de Persist ici, donc pas de ReloadUI.
+local function SetRowProgressive(row, enabled)
+    if not row.saveId then return end
+    if not NS.Data.SetSaveProgressive(row.saveId, enabled) then return end
+
+    UI.RefreshList()
+    ShowRowTooltip(row)
+end
+
+local function OnProgressiveOnClick(self)
+    SetRowProgressive(self.row, true)
+end
+
+local function OnProgressiveOffClick(self)
+    SetRowProgressive(self.row, false)
 end
 
 local function OnHeaderClick(self)
@@ -121,6 +205,14 @@ local function AcquireRow(index)
     row.bg:SetAllPoints(row)
     row.bg:SetTexture(1, 1, 1, 0.04)
 
+    -- L'avancement remplit le fond de la ligne plutot que d'occuper une barre a lui :
+    -- il ne coute aucune hauteur, et sur une liste longue il se lit sans etre lu.
+    row.fill = row:CreateTexture(nil, "BORDER")
+    row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.fill:SetTexture(0.25, 0.75, 0.35, 0.16)
+    row.fill:Hide()
+
     row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.nameText:SetPoint("TOPLEFT", row, "TOPLEFT", 6, -4)
     row.nameText:SetPoint("RIGHT", row, "RIGHT", -6, 0)
@@ -145,15 +237,55 @@ local function AcquireRow(index)
     row.activateBtn.row = row
     row.activateBtn:SetScript("OnClick", OnActivateClick)
 
+    row.onBtn = CreateFrame("Button", "STAL_Row" .. index .. "OnBtn", row, "UIPanelButtonTemplate2")
+    row.onBtn:SetSize(TOGGLE_WIDTH, TOGGLE_HEIGHT)
+    row.onBtn:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 6 + TOGGLE_LABEL_WIDTH + 4, 5)
+    row.onBtn.row = row
+    row.onBtn:SetScript("OnClick", OnProgressiveOnClick)
+
+    row.offBtn = CreateFrame("Button", "STAL_Row" .. index .. "OffBtn", row, "UIPanelButtonTemplate2")
+    row.offBtn:SetSize(TOGGLE_WIDTH, TOGGLE_HEIGHT)
+    row.offBtn:SetPoint("LEFT", row.onBtn, "RIGHT", 1, 0)
+    row.offBtn.row = row
+    row.offBtn:SetScript("OnClick", OnProgressiveOffClick)
+
+    -- Largeur figee et ancrage par la droite : le libelle se centre sur la bascule et
+    -- se coupe au lieu de la pousser dans le bouton Activer quand la langue est longue.
+    row.progLabel = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.progLabel:SetWidth(TOGGLE_LABEL_WIDTH)
+    row.progLabel:SetJustifyH("LEFT")
+    row.progLabel:SetPoint("RIGHT", row.onBtn, "LEFT", -4, 0)
+    row.progLabel:SetText(L.ROW_PROGRESSIVE)
+
     row:SetScript("OnEnter", ShowRowTooltip)
     row:SetScript("OnLeave", HideRowTooltip)
     row.activateBtn:SetScript("OnEnter", ShowRowTooltip)
     row.activateBtn:SetScript("OnLeave", HideRowTooltip)
     row.menuBtn:SetScript("OnEnter", ShowRowTooltip)
     row.menuBtn:SetScript("OnLeave", HideRowTooltip)
+    row.onBtn:SetScript("OnEnter", ShowRowTooltip)
+    row.onBtn:SetScript("OnLeave", HideRowTooltip)
+    row.offBtn:SetScript("OnEnter", ShowRowTooltip)
+    row.offBtn:SetScript("OnLeave", HideRowTooltip)
 
     rowPool[index] = row
     return row
+end
+
+local function SetRowFill(row, fraction)
+    if not fraction or fraction <= 0 then
+        row.fill:Hide()
+        return
+    end
+
+    if fraction > 1 then fraction = 1 end
+    row.fill:SetWidth(math.max(1, ROW_WIDTH * fraction))
+    row.fill:Show()
+end
+
+local function SetRowMode(row, progressive)
+    row.onBtn:SetText(Colorize(progressive and COLOR.SUCCESS or COLOR.DIM, L.BTN_ON))
+    row.offBtn:SetText(Colorize(progressive and COLOR.DIM or COLOR.HIGHLIGHT, L.BTN_OFF))
 end
 
 local function LayoutSaveRow(saveId)
@@ -170,19 +302,56 @@ local function LayoutSaveRow(saveId)
 
     row.nameText:SetText(save.name)
 
+    local progressive = save.progressive == true
+    SetRowMode(row, progressive)
+
     local totalCost, actions
     if layout.snapshot then
         totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks, layout.snapshot)
     end
 
+    -- Les deux ensembles que l'overlay dessinera au survol. `affordable` reste nil en
+    -- mode complet : rien a departager, une seule couleur sur l'arbre.
+    row.missing, row.affordable = nil, nil
+
     local canActivate = false
+
     if not totalCost then
         row.costText:SetText(Colorize(COLOR.ERROR, L.ROW_READ_FAILED))
+        SetRowFill(row, 0)
     elseif #actions == 0 then
         row.costText:SetText(Colorize(COLOR.SUCCESS, L.ROW_ACTIVE))
+        SetRowFill(row, 1)
     else
-        row.costText:SetText(string.format(L.ROW_COST, #actions, FormatCost(totalCost)))
-        canActivate = (layout.available ~= nil) and (layout.available >= totalCost)
+        row.missing = NS.Plan.ComputeMissing(save.nodeRanks, layout.snapshot)
+
+        local ownedCost, saveCost = NS.Plan.ComputeProgress(save.nodeRanks, layout.snapshot)
+        SetRowFill(row, (ownedCost and saveCost and saveCost > 0) and (ownedCost / saveCost) or 0)
+
+        if progressive then
+            local chosen, spent, count, blocked =
+                NS.Plan.ComputeProgressive(save.nodeRanks, layout.snapshot, layout.available or 0)
+
+            if chosen and count > 0 then
+                row.affordable = chosen
+                row.costText:SetText(string.format(L.ROW_NEXT_STEP, count, FormatCost(spent)))
+                canActivate = true
+            else
+                row.affordable = chosen or {}
+                -- Le seul chiffre utile quand rien n'est payable : le prix du prochain
+                -- rang ouvert, pas le total de la save.
+                local short = blocked and (blocked - (layout.available or 0))
+                if short and short > 0 then
+                    row.costText:SetText(Colorize(COLOR.WARN,
+                        string.format(L.ROW_BLOCKED, FormatCost(short))))
+                else
+                    row.costText:SetText(string.format(L.ROW_COST, #actions, FormatCost(totalCost)))
+                end
+            end
+        else
+            row.costText:SetText(string.format(L.ROW_COST, #actions, FormatCost(totalCost)))
+            canActivate = (layout.available ~= nil) and (layout.available >= totalCost)
+        end
     end
 
     if canActivate then
@@ -304,7 +473,12 @@ local function BuildPanel()
     panel:SetScript("OnUpdate", function(_, elapsed)
         sinceCheck = sinceCheck + elapsed
         if sinceCheck < NS.ASHES_POLL_INTERVAL then return end
-        sinceCheck = 0
+
+        -- On retire l'intervalle au lieu de remettre a zero : le rythme reste
+        -- celui annonce, quelle que soit la duree d'une frame. Au-dela d'un tour
+        -- de retard, on repart de zero plutot que de rattraper en rafale.
+        sinceCheck = sinceCheck - NS.ASHES_POLL_INTERVAL
+        if sinceCheck > NS.ASHES_POLL_INTERVAL then sinceCheck = 0 end
 
         local ashes = NS.Core.GetAvailableSoulAshes()
         if ashes ~= lastAshes then
@@ -326,7 +500,7 @@ local function ShowPanel()
 end
 
 local function HidePanel()
-
+    NS.Overlay.Hide()
     if panel then panel:Hide() end
 end
 

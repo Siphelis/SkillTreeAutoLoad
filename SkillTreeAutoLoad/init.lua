@@ -10,6 +10,7 @@ NS.COLOR = {
     WARN = "|cffff9900",
     SUCCESS = "|cff40ff40",
     HIGHLIGHT = "|cffffd200",
+    DIM = "|cff808080",
     RESET = "|r",
 }
 

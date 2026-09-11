@@ -29,6 +29,27 @@ local function EnsureShape(db)
     return db
 end
 
+-- Un rang venu du disque n'est pas une donnee de confiance : un fichier abime ou
+-- edite a la main y met ce qu'il veut, et un rang absurde se paie ailleurs, en
+-- boucles de planification qui ne finissent pas. On repare ici, une fois, a la
+-- lecture, plutot que de se defendre partout ensuite.
+local MAX_RANK = 32
+
+local function RepairRanks(nodeRanks)
+    local fixed = 0
+    for nodeId, rank in pairs(nodeRanks) do
+        if type(nodeId) ~= "number" or type(rank) ~= "number"
+            or rank ~= math.floor(rank) or rank <= 0 then
+            nodeRanks[nodeId] = nil
+            fixed = fixed + 1
+        elseif rank > MAX_RANK then
+            nodeRanks[nodeId] = MAX_RANK
+            fixed = fixed + 1
+        end
+    end
+    return fixed
+end
+
 local function Sanitize(db)
     for id, group in pairs(db.groups) do
         if not IsTable(group) or type(group.name) ~= "string" then
@@ -38,13 +59,20 @@ local function Sanitize(db)
         end
     end
 
+    local fixed = 0
     for id, save in pairs(db.saves) do
         if not IsTable(save) or type(save.name) ~= "string" then
             db.saves[id] = nil
-        elseif not IsTable(save.nodeRanks) then
-            save.nodeRanks = {}
+        else
+            if not IsTable(save.nodeRanks) then save.nodeRanks = {} end
+            fixed = fixed + RepairRanks(save.nodeRanks)
+            -- Absent vaut « complet » : le mode progressif ne s'ecrit que lorsqu'il
+            -- est demande, et une base d'avant cette version reste lisible telle quelle.
+            if save.progressive ~= true then save.progressive = nil end
         end
     end
+
+    if fixed > 0 then NS.LogWarn(string.format(L.MSG_RANKS_FIXED, fixed)) end
 
     if db.version ~= SCHEMA_VERSION then Migrate(db) end
 end
@@ -247,10 +275,18 @@ function Data.Init()
 end
 
 local function DB()
-    return IsTable(SkillTreeAutoLoadAccountDB) and SkillTreeAutoLoadAccountDB or Data.Init()
+    if not IsTable(SkillTreeAutoLoadAccountDB) then return Data.Init() end
+    -- EnsureShape est idempotent : le payer a chaque acces coute cinq tests, et
+    -- ferme toute une classe de « attempt to index a nil value » le jour ou une
+    -- base tronquee arrive du disque avant le premier Data.Init().
+    return EnsureShape(SkillTreeAutoLoadAccountDB)
 end
 
 function Data.Persist()
+    -- Les SavedVariables ne partent sur le disque qu'a la deconnexion ou au
+    -- rechargement : on provoque le second. Le joueur doit savoir pourquoi son
+    -- ecran se vide.
+    NS.Log(L.MSG_RELOADING)
     ReloadUI()
 end
 
@@ -307,6 +343,22 @@ function Data.RenameSave(saveId, newName)
     if not save then return false end
     save.name = newName
     return true
+end
+
+-- Le mode d'activation n'appelle pas Persist : il se bascule en cours de partie,
+-- souvent, et un ReloadUI a chaque clic rendrait la bascule inutilisable. La valeur
+-- part sur le disque a la prochaine deconnexion ou au prochain rechargement, comme
+-- n'importe quel reglage. Au pire on reperd un basculement, jamais une save.
+function Data.SetSaveProgressive(saveId, enabled)
+    local save = DB().saves[saveId]
+    if not save then return false end
+    save.progressive = enabled and true or nil
+    return true
+end
+
+function Data.IsSaveProgressive(saveId)
+    local save = DB().saves[saveId]
+    return (save and save.progressive) == true
 end
 
 function Data.MoveSaveToGroup(saveId, groupId)

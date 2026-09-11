@@ -1,8 +1,9 @@
 ## Interface: 30300
 ## Title: SkillTreeAutoLoad
 ## Notes: Save and restore Soul Tree milestones (ProjectEbonhold)
+## OptionalDeps: ProjectEbonhold
 ## Author: Siphelis
-## Version: 1.5.0
+## Version: 1.5.1-0
 ## X-License: PolyForm Strict License 1.0.0
 ## SavedVariables: SkillTreeAutoLoadAccountDB
 ## SavedVariablesPerCharacter: SkillTreeAutoLoadDB
@@ -15,6 +16,8 @@ locales\deDE.lua
 locales\esES.lua
 
 modules\core.lua
+modules\plan.lua
+modules\overlay.lua
 modules\data.lua
 modules\bridge.lua
 modules\menus.lua
