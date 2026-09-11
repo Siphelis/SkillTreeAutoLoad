@@ -3,6 +3,9 @@
 
 *.yml text eol=lf
 
+# Le .toc voyage tel qu'il est teste en jeu.
+*.toc text eol=crlf
+
 *.png binary
 *.jpg binary
 *.gif binary
