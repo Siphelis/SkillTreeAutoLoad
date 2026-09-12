@@ -67,9 +67,17 @@ local function ReadNodeRank(node)
     local btn = GetNodeButton(node.id)
     if not btn or btn.state == "locked" then return 0 end
 
+    -- Le motif est ancre sur un chiffre : si le premier octet n'en est pas un, la
+    -- recherche ne peut qu'echouer. ProjectEbonhold n'ecrit « n/m » que sur les
+    -- noeuds a plusieurs rangs et pose une coche sur tous les autres — ce test
+    -- epargne donc une recherche de motif sur la quasi-totalite des noeuds, et la
+    -- capture est refaite a chaque redessin de la liste.
     local text = btn.rankText and btn.rankText:GetText()
-    local current = text and tonumber(text:match("^(%d+)/%d+$"))
-    if current then return current end
+    local first = text and text:byte(1)
+    if first and first >= 48 and first <= 57 then
+        local current = tonumber(text:match("^(%d+)/%d+$"))
+        if current then return current end
+    end
 
     return (btn.state == "active") and #(node.spells or {}) or 0
 end
@@ -134,6 +142,10 @@ function Core.GetAvailableSoulAshes()
     return (sign == "-") and -value or value
 end
 
+-- Rend le prix de la save et le nombre de noeuds qu'elle ajouterait. Pas la liste
+-- de ces noeuds : aucun appelant n'en lisait le detail, tous s'arretaient a leur
+-- nombre. La construire coutait une table par noeud puis un tri complet, a chaque
+-- ligne de la liste et a chaque rafraichissement — pour la jeter aussitot.
 function Core.ComputeActivationPlan(saveNodeRanks, snapshot)
     local defs = GetNodeDefs()
     if not defs then return nil end
@@ -141,8 +153,7 @@ function Core.ComputeActivationPlan(saveNodeRanks, snapshot)
     snapshot = snapshot or Core.GetTreeSnapshot()
     if not snapshot then return nil end
 
-    local totalCost = 0
-    local actions = {}
+    local totalCost, pendingNodes = 0, 0
 
     for nodeId, targetRank in pairs(saveNodeRanks or {}) do
         local node = defs[nodeId]
@@ -150,22 +161,15 @@ function Core.ComputeActivationPlan(saveNodeRanks, snapshot)
             local currentRank = snapshot[nodeId] or 0
             if currentRank < targetRank then
                 local costs = node.soulPointsCosts or {}
-                local nodeCost = 0
                 for rankIdx = currentRank + 1, targetRank do
-                    nodeCost = nodeCost + (costs[rankIdx] or 0)
+                    totalCost = totalCost + (costs[rankIdx] or 0)
                 end
-                totalCost = totalCost + nodeCost
-                actions[#actions + 1] = {
-                    nodeId = nodeId,
-                    toRank = targetRank,
-                    cost = nodeCost,
-                }
+                pendingNodes = pendingNodes + 1
             end
         end
     end
 
-    table.sort(actions, function(a, b) return a.nodeId < b.nodeId end)
-    return totalCost, actions
+    return totalCost, pendingNodes
 end
 
 -- La reserve ne se memorise pas : on la recalcule depuis la base annoncee par le
@@ -327,7 +331,7 @@ function Core.ApplyBuild(saveNodeRanks)
     if not after then return nil, L.ERR_REREAD_TREE end
 
     local _, remaining = Core.ComputeActivationPlan(target, after)
-    if not remaining or #remaining > 0 then
+    if not remaining or remaining > 0 then
         return nil, L.ERR_MISMATCH
     end
 

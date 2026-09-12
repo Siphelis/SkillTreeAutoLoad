@@ -3,7 +3,7 @@
 ## Notes: Save and restore Soul Tree milestones (ProjectEbonhold)
 ## OptionalDeps: ProjectEbonhold
 ## Author: Siphelis
-## Version: 1.5.1
+## Version: 1.6.0-0
 ## X-License: PolyForm Strict License 1.0.0
 ## SavedVariables: SkillTreeAutoLoadAccountDB
 ## SavedVariablesPerCharacter: SkillTreeAutoLoadDB

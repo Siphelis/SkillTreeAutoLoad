@@ -34,19 +34,19 @@ local function ActivateSave(saveId)
 
     NS.Core.InvalidateSnapshot()
     local snapshot = NS.Core.GetTreeSnapshot()
-    local totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
-    if not actions then
+    local _, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
+    if not pendingNodes then
         NS.LogError(L.MSG_READ_FAILED)
         return
     end
-    if #actions == 0 then
+    if pendingNodes == 0 then
         Log(string.format(L.MSG_ALREADY_ACTIVE, save.name))
         return
     end
 
     -- Le plan progressif est recalcule au clic, jamais repris de la liste : entre le
     -- dernier rafraichissement et maintenant, le solde a pu bouger.
-    local targets, touched, partial = save.nodeRanks, #actions, false
+    local targets, touched, partial = save.nodeRanks, pendingNodes, false
 
     if save.progressive then
         local available = NS.Core.GetAvailableSoulAshes() or 0
@@ -62,7 +62,7 @@ local function ActivateSave(saveId)
             return
         end
 
-        targets, touched, partial = chosen, count, count < #actions
+        targets, touched, partial = chosen, count, count < pendingNodes
     end
 
     local cost, err = NS.Core.ApplyBuild(targets)
@@ -74,7 +74,7 @@ local function ActivateSave(saveId)
 
     if partial then
         Log(Colorize(COLOR.SUCCESS, string.format(L.MSG_APPLIED_PARTIAL,
-            save.name, touched, FormatCost(cost), #actions - touched)))
+            save.name, touched, FormatCost(cost), pendingNodes - touched)))
     else
         Log(Colorize(COLOR.SUCCESS, string.format(L.MSG_APPLIED,
             save.name, touched, FormatCost(cost))))
@@ -87,22 +87,27 @@ local function ShowRowTooltip(self)
     local save = row.saveId and NS.Data.GetSave(row.saveId)
     if not save then return end
 
-    -- Les deux ensembles ont ete calcules par le dernier rafraichissement, qui rejoue
-    -- des que le solde bouge : les redessiner ici suffit, sans rien recalculer.
-    NS.Overlay.Show(row.missing, row.affordable)
+    local snapshot = NS.Core.GetTreeSnapshot()
+
+    -- Ce que la save ajouterait ne sert qu'ici, au survol : le calculer pour chaque
+    -- ligne a chaque rafraichissement revenait a preparer une table par save pour
+    -- celle, au plus, que le joueur allait survoler. `affordable` vient de la ligne,
+    -- lui : c'est le plan que son texte annonce, il doit rester celui-la.
+    NS.Overlay.Show(snapshot and NS.Plan.ComputeMissing(save.nodeRanks, snapshot),
+        row.affordable)
 
     local anchor = (NS.Data.GetPanelSide() == "LEFT") and "ANCHOR_RIGHT" or "ANCHOR_LEFT"
     GameTooltip:SetOwner(row, anchor)
     GameTooltip:SetText(save.name, 1, 1, 1)
 
-    local totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks)
+    local totalCost, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
     if not totalCost then
         GameTooltip:AddLine(L.TOOLTIP_READ_FAILED, 1, 0.3, 0.3)
-    elseif #actions == 0 then
+    elseif pendingNodes == 0 then
         GameTooltip:AddLine(L.ROW_ACTIVE, 0.25, 1, 0.25)
     else
         local ownedCost, saveCost, ownedNodes, totalNodes =
-            NS.Plan.ComputeProgress(save.nodeRanks, NS.Core.GetTreeSnapshot())
+            NS.Plan.ComputeProgress(save.nodeRanks, snapshot)
         if ownedCost then
             GameTooltip:AddLine(string.format(L.TOOLTIP_PROGRESS, ownedNodes, totalNodes,
                 FormatCost(ownedCost), FormatCost(saveCost)), 0.8, 0.8, 0.8)
@@ -305,26 +310,24 @@ local function LayoutSaveRow(saveId)
     local progressive = save.progressive == true
     SetRowMode(row, progressive)
 
-    local totalCost, actions
+    local totalCost, pendingNodes
     if layout.snapshot then
-        totalCost, actions = NS.Core.ComputeActivationPlan(save.nodeRanks, layout.snapshot)
+        totalCost, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, layout.snapshot)
     end
 
-    -- Les deux ensembles que l'overlay dessinera au survol. `affordable` reste nil en
-    -- mode complet : rien a departager, une seule couleur sur l'arbre.
-    row.missing, row.affordable = nil, nil
+    -- Le plan que l'overlay peindra en vert au survol. Reste nil en mode complet :
+    -- rien a departager, une seule couleur sur l'arbre.
+    row.affordable = nil
 
     local canActivate = false
 
     if not totalCost then
         row.costText:SetText(Colorize(COLOR.ERROR, L.ROW_READ_FAILED))
         SetRowFill(row, 0)
-    elseif #actions == 0 then
+    elseif pendingNodes == 0 then
         row.costText:SetText(Colorize(COLOR.SUCCESS, L.ROW_ACTIVE))
         SetRowFill(row, 1)
     else
-        row.missing = NS.Plan.ComputeMissing(save.nodeRanks, layout.snapshot)
-
         local ownedCost, saveCost = NS.Plan.ComputeProgress(save.nodeRanks, layout.snapshot)
         SetRowFill(row, (ownedCost and saveCost and saveCost > 0) and (ownedCost / saveCost) or 0)
 
@@ -345,11 +348,11 @@ local function LayoutSaveRow(saveId)
                     row.costText:SetText(Colorize(COLOR.WARN,
                         string.format(L.ROW_BLOCKED, FormatCost(short))))
                 else
-                    row.costText:SetText(string.format(L.ROW_COST, #actions, FormatCost(totalCost)))
+                    row.costText:SetText(string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
                 end
             end
         else
-            row.costText:SetText(string.format(L.ROW_COST, #actions, FormatCost(totalCost)))
+            row.costText:SetText(string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
             canActivate = (layout.available ~= nil) and (layout.available >= totalCost)
         end
     end
@@ -363,7 +366,10 @@ local function LayoutSaveRow(saveId)
     layout.y = layout.y - (ROW_HEIGHT + ROW_SPACING)
 end
 
-local function LayoutGroup(groupId, groupName)
+-- La liste des saves du groupe est passee plutot que redemandee : l'appelant doit
+-- deja la connaitre pour savoir s'il y a un groupe a dessiner, et chaque demande
+-- rebalaye puis retrie toutes les saves de la base.
+local function LayoutGroup(groupId, groupName, saveIds)
     layout.headers = layout.headers + 1
     local header = AcquireHeader(layout.headers)
     header.groupId = groupId
@@ -375,7 +381,7 @@ local function LayoutGroup(groupId, groupName)
 
     layout.y = layout.y - (GROUP_HEADER_HEIGHT + ROW_SPACING)
 
-    for _, saveId in ipairs(NS.Data.GetSortedSaveIdsInGroup(groupId)) do
+    for _, saveId in ipairs(saveIds) do
         LayoutSaveRow(saveId)
     end
 end
@@ -390,11 +396,13 @@ function UI.RefreshList()
     layout.available = NS.Core.GetAvailableSoulAshes()
 
     for _, groupId in ipairs(NS.Data.GetSortedGroupIds()) do
-        LayoutGroup(groupId, NS.Data.GetGroup(groupId).name)
+        LayoutGroup(groupId, NS.Data.GetGroup(groupId).name,
+            NS.Data.GetSortedSaveIdsInGroup(groupId))
     end
 
-    if #NS.Data.GetSortedSaveIdsInGroup(nil) > 0 then
-        LayoutGroup(nil, L.UNGROUPED)
+    local ungrouped = NS.Data.GetSortedSaveIdsInGroup(nil)
+    if #ungrouped > 0 then
+        LayoutGroup(nil, L.UNGROUPED, ungrouped)
     end
 
     for i = layout.headers + 1, #headerPool do headerPool[i]:Hide() end
