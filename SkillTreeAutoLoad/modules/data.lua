@@ -390,3 +390,31 @@ end
 function Data.GetPanelSide()
     return DB().settings.panelSide
 end
+
+-- Reglages d'affichage : pas de Persist, comme le mode progressif. Ils se basculent
+-- en jeu et partent sur le disque a la prochaine deconnexion ou au prochain
+-- rechargement. Absent vaut desactive.
+function Data.SetCompact(enabled)
+    DB().settings.compact = enabled and true or nil
+end
+
+function Data.IsCompact()
+    return DB().settings.compact == true
+end
+
+function Data.SetPanelCollapsed(collapsed)
+    DB().settings.collapsed = collapsed and true or nil
+end
+
+function Data.IsPanelCollapsed()
+    return DB().settings.collapsed == true
+end
+
+-- Actif par defaut : c'est la desactivation qui s'ecrit.
+function Data.SetPreviewCamera(enabled)
+    DB().settings.noPreviewCamera = (not enabled) and true or nil
+end
+
+function Data.IsPreviewCamera()
+    return DB().settings.noPreviewCamera ~= true
+end

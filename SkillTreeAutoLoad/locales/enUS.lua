@@ -7,6 +7,10 @@ NS.L = {
     MENU_NEW_GROUP = "New group",
     BTN_MENU = "...",
     BTN_SIDE = "<>",
+    BTN_COLLAPSE = "-",
+    BTN_EXPAND = "+",
+    MENU_COMPACT = "Compact mode",
+    MENU_PREVIEW_CAMERA = "Frame the tree on hover",
     UNGROUPED = "Uncategorized",
     EMPTY_LIST = "No save yet. Use the '...' menu to store the current state of the tree.",
 

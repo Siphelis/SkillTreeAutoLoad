@@ -6,6 +6,8 @@ L.BTN_ACTIVATE = "Activer"
 L.BTN_PANEL_MENU = "..."
 L.MENU_NEW_SAVE = "Nouvelle sauvegarde"
 L.MENU_NEW_GROUP = "Nouveau groupe"
+L.MENU_COMPACT = "Mode compact"
+L.MENU_PREVIEW_CAMERA = "Cadrer l'arbre au survol"
 L.UNGROUPED = "Sans catégorie"
 L.EMPTY_LIST = "Aucune sauvegarde. Utilisez le menu '...' pour enregistrer l'état actuel de l'arbre."
 

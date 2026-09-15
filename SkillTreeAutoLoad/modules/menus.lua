@@ -91,14 +91,25 @@ local function AddButton(level, text, func, hasArrow, menuList)
     UIDropDownMenu_AddButton(info, level)
 end
 
+local function AddToggle(level, text, checked, func)
+    local info = UIDropDownMenu_CreateInfo()
+    info.text = text
+    info.checked = checked
+    info.func = func
+    UIDropDownMenu_AddButton(info, level)
+end
+
 local function OpenMenu(anchor)
     ToggleDropDownMenu(1, nil, dropdown, anchor, 0, 0)
 
     local list = _G["DropDownList1"]
     if not (list and list:IsShown()) then return end
 
+    -- La liste s'ouvre loin de l'arbre, sauf en mode compact : le panneau est alors
+    -- dans la fenetre, et c'est vers l'interieur, par-dessus le panneau, qu'elle
+    -- reste dans la fenetre.
     list:ClearAllPoints()
-    if NS.Data.GetPanelSide() == "LEFT" then
+    if NS.Data.IsCompact() or NS.Data.GetPanelSide() == "LEFT" then
         list:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, 0)
     else
         list:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, 0)
@@ -138,6 +149,14 @@ function Menus.ShowPanelMenu(anchor)
                 NS.Data.CreateGroup(name)
                 NS.Data.Persist()
             end)
+        end)
+
+        AddToggle(level, L.MENU_COMPACT, NS.Data.IsCompact(), function()
+            NS.UI.SetCompact(not NS.Data.IsCompact())
+        end)
+
+        AddToggle(level, L.MENU_PREVIEW_CAMERA, NS.Data.IsPreviewCamera(), function()
+            NS.Data.SetPreviewCamera(not NS.Data.IsPreviewCamera())
         end)
     end, "MENU")
 

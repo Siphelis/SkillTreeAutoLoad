@@ -10,6 +10,11 @@ NS.UI = UI
 
 local PANEL_WIDTH = 275
 local PANEL_GAP = 6
+local TAB_WIDTH = 40
+local TAB_HEIGHT = 36
+local GLASS_ALPHA = 0.55
+local GLASS_GRAIN_ALPHA = 0.25
+local GLASS_FADE_WIDTH = 16
 local ROW_HEIGHT = 54
 local ROW_SPACING = 3
 local GROUP_HEADER_HEIGHT = 22
@@ -24,8 +29,13 @@ local TOGGLE_LABEL_WIDTH = 62
 -- on la derive des constantes plutot que de lire une geometrie pas encore calculee.
 local ROW_WIDTH = PANEL_WIDTH - 12 - SCROLL_MARGIN_RIGHT - 4
 
-local panel, scrollChild, emptyText
+local panel, scroll, scrollChild, emptyText
+local sideBtn, collapseBtn, menuBtn, grain, fade
 local headerPool, rowPool = {}, {}
+
+-- Definie plus bas, pres de la disposition du panneau : RefreshList l'appelle pour
+-- ranger les lignes qu'il vient de creer.
+local ApplyLevels
 
 local layout = { y = 0, headers = 0, rows = 0, snapshot = nil, available = nil }
 
@@ -83,6 +93,99 @@ local function ActivateSave(saveId)
     UI.RefreshList()
 end
 
+-- La fenetre qui porte l'arbre : son ancetre juste sous UIParent. Depuis que l'arbre
+-- est un onglet de CollectionsJournal, ses bords ne sont plus ceux de la fenetre, et
+-- c'est contre la fenetre que le panneau doit se poser.
+local function GetTreeWindow()
+    local window, parent = skillTreeFrame, skillTreeFrame:GetParent()
+    while parent and parent ~= UIParent do
+        window, parent = parent, parent:GetParent()
+    end
+    return window
+end
+
+local TOOLTIP_GAP = 4
+
+-- Bords en pixels d'ecran : l'infobulle, le panneau et la fenetre n'ont pas forcement la
+-- meme echelle.
+local function ScreenLeft(frame)
+    return frame:GetLeft() * frame:GetEffectiveScale()
+end
+
+local function ScreenRight(frame)
+    return frame:GetRight() * frame:GetEffectiveScale()
+end
+
+-- Alignee sur le haut de la ligne, l'infobulle se colle au bord `edge` du cote voulu.
+-- Les decalages de SetPoint se comptent a l'echelle de l'infobulle.
+local function AnchorTooltip(row, towardRight, edge)
+    local scale = GameTooltip:GetEffectiveScale()
+    GameTooltip:ClearAllPoints()
+    if towardRight then
+        GameTooltip:SetPoint("TOPLEFT", row, "TOPRIGHT",
+            (ScreenRight(edge) - ScreenRight(row)) / scale + TOOLTIP_GAP, 0)
+    else
+        GameTooltip:SetPoint("TOPRIGHT", row, "TOPLEFT",
+            (ScreenLeft(edge) - ScreenLeft(row)) / scale - TOOLTIP_GAP, 0)
+    end
+end
+
+-- Panneau a gauche, l'infobulle n'a nulle part ou aller de cote : dehors, la fenetre
+-- colle au bord de l'ecran ; dedans, elle recouvrirait l'arbre. Elle se pose donc sous
+-- la ligne, dans la colonne du panneau dont elle a pris la largeur, ou au-dessus quand
+-- l'ecran manque de place en bas.
+local function StackTooltip(row)
+    local scale = GameTooltip:GetEffectiveScale()
+    local rowScale = row:GetEffectiveScale()
+    local needed = (GameTooltip:GetHeight() + TOOLTIP_GAP) * scale
+    local below = row:GetBottom() * rowScale
+    local above = UIParent:GetHeight() * UIParent:GetEffectiveScale() - row:GetTop() * rowScale
+    local x = (ScreenLeft(panel) - ScreenLeft(row)) / scale
+
+    GameTooltip:ClearAllPoints()
+    if below >= needed or below >= above then
+        GameTooltip:SetPoint("TOPLEFT", row, "BOTTOMLEFT", x, -TOOLTIP_GAP)
+    else
+        GameTooltip:SetPoint("BOTTOMLEFT", row, "TOPLEFT", x, TOOLTIP_GAP)
+    end
+end
+
+-- Panneau a droite, l'infobulle part vers l'exterieur, loin de l'arbre qu'elle
+-- recouvrirait. En mode compact, l'exterieur commence au bord de la fenetre, le panneau
+-- etant dedans. Elle ne revient cote arbre, contre le bord interieur du panneau, que si
+-- l'ecran n'a pas la place de la loger dehors : l'infobulle est bornee a l'ecran, et le
+-- client la ramenerait sinon par-dessus le panneau lui-meme.
+local function PlaceRowTooltip(row, stacked)
+    local outer = NS.Data.IsCompact() and GetTreeWindow() or panel
+    if not (outer:GetLeft() and row:GetLeft() and row:GetBottom() and panel:GetLeft()) then
+        -- Geometrie pas encore calculee : une ancre simple plutot qu'une infobulle sans
+        -- aucun point, que le client n'afficherait nulle part.
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("TOPLEFT", row, "TOPRIGHT", TOOLTIP_GAP, 0)
+        return
+    end
+
+    if stacked then
+        StackTooltip(row)
+        return
+    end
+
+    local towardRight = NS.Data.GetPanelSide() == "RIGHT"
+    local needed = (GameTooltip:GetWidth() + TOOLTIP_GAP) * GameTooltip:GetEffectiveScale()
+    local room
+    if towardRight then
+        room = UIParent:GetWidth() * UIParent:GetEffectiveScale() - ScreenRight(outer)
+    else
+        room = ScreenLeft(outer)
+    end
+
+    if room >= needed then
+        AnchorTooltip(row, towardRight, outer)
+    else
+        AnchorTooltip(row, not towardRight, panel)
+    end
+end
+
 local function ShowRowTooltip(self)
     local row = self.row or self
     local save = row.saveId and NS.Data.GetSave(row.saveId)
@@ -94,40 +197,53 @@ local function ShowRowTooltip(self)
     -- ligne a chaque rafraichissement revenait a preparer une table par save pour
     -- celle, au plus, que le joueur allait survoler. `affordable` vient de la ligne,
     -- lui : c'est le plan que son texte annonce, il doit rester celui-la.
-    NS.Overlay.Show(snapshot and NS.Plan.ComputeMissing(save.nodeRanks, snapshot),
-        row.affordable)
+    local missing = snapshot and NS.Plan.ComputeMissing(save.nodeRanks, snapshot)
+    NS.Overlay.Show(missing, row.affordable)
+    NS.View.Preview(row.saveId, missing, row.affordable)
 
-    local anchor = (NS.Data.GetPanelSide() == "LEFT") and "ANCHOR_RIGHT" or "ANCHOR_LEFT"
-    GameTooltip:SetOwner(row, anchor)
-    GameTooltip:SetText(save.name, 1, 1, 1)
+    -- Posee apres Show : c'est Show qui donne sa taille a l'infobulle, et il faut la
+    -- connaitre pour savoir ou elle loge.
+    --
+    -- Empilee sous la ligne (panneau a gauche), elle prend la largeur du panneau et toutes
+    -- ses lignes passent a la ligne : trop large, elle deborderait sur l'arbre. La largeur
+    -- minimale est remise a zero dans tous les autres cas, GameTooltip servant a toute
+    -- l'interface.
+    local stacked = NS.Data.GetPanelSide() == "LEFT"
+    GameTooltip:SetOwner(row, "ANCHOR_NONE")
+    if GameTooltip.SetMinimumWidth then
+        GameTooltip:SetMinimumWidth(stacked
+            and (panel:GetWidth() * panel:GetEffectiveScale() / GameTooltip:GetEffectiveScale())
+            or 0)
+    end
+    GameTooltip:SetText(save.name, 1, 1, 1, 1, stacked)
 
     local totalCost, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
     if not totalCost then
-        GameTooltip:AddLine(L.TOOLTIP_READ_FAILED, 1, 0.3, 0.3)
+        GameTooltip:AddLine(L.TOOLTIP_READ_FAILED, 1, 0.3, 0.3, stacked)
     elseif pendingNodes == 0 then
-        GameTooltip:AddLine(L.ROW_ACTIVE, 0.25, 1, 0.25)
+        GameTooltip:AddLine(L.ROW_ACTIVE, 0.25, 1, 0.25, stacked)
     else
         local ownedCost, saveCost, ownedNodes, totalNodes =
             NS.Plan.ComputeProgress(save.nodeRanks, snapshot)
         if ownedCost then
             GameTooltip:AddLine(string.format(L.TOOLTIP_PROGRESS, ownedNodes, totalNodes,
-                FormatCost(ownedCost), FormatCost(saveCost)), 0.8, 0.8, 0.8)
+                FormatCost(ownedCost), FormatCost(saveCost)), 0.8, 0.8, 0.8, stacked)
         end
 
-        GameTooltip:AddLine(string.format(L.TOOLTIP_COST, FormatCost(totalCost)), 1, 0.82, 0)
+        GameTooltip:AddLine(string.format(L.TOOLTIP_COST, FormatCost(totalCost)), 1, 0.82, 0, stacked)
 
         local available = NS.Core.GetAvailableSoulAshes()
         if available and available < totalCost then
             GameTooltip:AddLine(string.format(L.TOOLTIP_MISSING, FormatCost(totalCost - available)),
-                1, 0.3, 0.3)
+                1, 0.3, 0.3, stacked)
         end
 
         -- La legende n'a de sens qu'en progressif : c'est le seul cas ou l'arbre
         -- porte deux couleurs.
         if row.affordable then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine(L.TOOLTIP_LEGEND_NOW, 0.3, 1, 0.3)
-            GameTooltip:AddLine(L.TOOLTIP_LEGEND_LATER, 1, 0.65, 0.1)
+            GameTooltip:AddLine(L.TOOLTIP_LEGEND_NOW, 0.3, 1, 0.3, stacked)
+            GameTooltip:AddLine(L.TOOLTIP_LEGEND_LATER, 1, 0.65, 0.1, stacked)
         end
     end
 
@@ -136,6 +252,7 @@ local function ShowRowTooltip(self)
         0.6, 0.6, 0.6, true)
 
     GameTooltip:Show()
+    PlaceRowTooltip(row, stacked)
 
     -- Le client habille GameTooltip d'un fond translucide : pose par-dessus la liste
     -- des saves, le texte devient illisible. On repose l'opacite apres Show, pas
@@ -147,7 +264,9 @@ end
 
 local function HideRowTooltip()
     GameTooltip:Hide()
+    if GameTooltip.SetMinimumWidth then GameTooltip:SetMinimumWidth(0) end
     NS.Overlay.Hide()
+    NS.View.Release()
 end
 
 -- Le mode se bascule en pleine partie : pas de Persist ici, donc pas de ReloadUI.
@@ -173,6 +292,9 @@ end
 
 local function OnActivateClick(self)
     ActivateSave(self.row.saveId)
+
+    -- L'arbre vient de changer sous la souris : marques, infobulle et apercu suivent.
+    if self:IsMouseOver() then ShowRowTooltip(self) end
 end
 
 local function OnRowMenuClick(self)
@@ -209,7 +331,6 @@ local function AcquireRow(index)
 
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints(row)
-    row.bg:SetTexture(1, 1, 1, 0.04)
 
     -- L'avancement remplit le fond de la ligne plutot que d'occuper une barre a lui :
     -- il ne coute aucune hauteur, et sur une liste longue il se lit sans etre lu.
@@ -305,6 +426,14 @@ local function LayoutSaveRow(saveId)
     row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 2, layout.y)
     row:SetPoint("RIGHT", scrollChild, "RIGHT", -2, 0)
     row:Show()
+
+    -- Sur le verre du mode compact, les icones de l'arbre passent sous le texte : le
+    -- fond de ligne se fonce pour qu'il reste lisible.
+    if NS.Data.IsCompact() then
+        row.bg:SetTexture(0, 0, 0, 0.35)
+    else
+        row.bg:SetTexture(1, 1, 1, 0.04)
+    end
 
     row.nameText:SetText(save.name)
 
@@ -412,17 +541,8 @@ function UI.RefreshList()
     scrollChild:SetHeight(math.max(-layout.y, 1))
 
     if layout.headers == 0 then emptyText:Show() else emptyText:Hide() end
-end
 
--- La fenetre qui porte l'arbre : son ancetre juste sous UIParent. Depuis que l'arbre
--- est un onglet de CollectionsJournal, ses bords ne sont plus ceux de la fenetre, et
--- c'est contre la fenetre que le panneau doit se poser.
-local function GetTreeWindow()
-    local window, parent = skillTreeFrame, skillTreeFrame:GetParent()
-    while parent and parent ~= UIParent do
-        window, parent = parent, parent:GetParent()
-    end
-    return window
+    ApplyLevels()
 end
 
 -- CollectionsJournal est range par le gestionnaire de panneaux de Blizzard, colle au
@@ -447,35 +567,195 @@ local function SetWindowShift(window, shift)
     if window:IsShown() then UpdateUIPanelPositions(window) end
 end
 
-local function PositionPanel()
-    if not (panel and _G.skillTreeFrame) then return end
+-- Hors mode compact, le panneau est seul dans sa strate : rien a arbitrer. En mode
+-- compact, il vit dans l'arbre et doit s'intercaler entre ses couches : au-dessus des
+-- noeuds et de nos marques (noeud + MARK_LEVEL), sous les boutons de choix qu'Ebonhold
+-- ouvre autour d'un noeud (noeud + 10) et sous la barre de progression (arbre + 15).
+-- Restent quatre niveaux pour un contenu qui en empile cinq a l'etat naturel : ils sont
+-- donc poses a la main, chaque bouton toujours au-dessus de ce qui le porte, sans quoi
+-- il ne recevrait plus les clics.
+ApplyLevels = function()
+    if not panel then return end
 
-    local window = GetTreeWindow()
-    local side = NS.Data.GetPanelSide()
-
-    SetWindowShift(window, (side == "LEFT") and (PANEL_WIDTH + PANEL_GAP) or 0)
-
-    panel:ClearAllPoints()
-    if side == "LEFT" then
-        panel:SetPoint("TOPRIGHT", window, "TOPLEFT", -PANEL_GAP, 0)
-        panel:SetPoint("BOTTOMRIGHT", window, "BOTTOMLEFT", -PANEL_GAP, 0)
+    local base
+    if NS.Data.IsCompact() and _G.skillTreeCanvas then
+        -- Les noeuds sont les enfants directs du canevas.
+        base = skillTreeCanvas:GetFrameLevel() + 1 + NS.Overlay.MARK_LEVEL + 1
     else
-        panel:SetPoint("TOPLEFT", window, "TOPRIGHT", PANEL_GAP, 0)
-        panel:SetPoint("BOTTOMLEFT", window, "BOTTOMRIGHT", PANEL_GAP, 0)
+        base = panel:GetParent():GetFrameLevel() + 1
+    end
+
+    panel:SetFrameLevel(base)
+    sideBtn:SetFrameLevel(base + 1)
+    collapseBtn:SetFrameLevel(base + 1)
+    menuBtn:SetFrameLevel(base + 1)
+    scroll:SetFrameLevel(base + 1)
+    scrollChild:SetFrameLevel(base + 1)
+
+    local bar = _G[scroll:GetName() .. "ScrollBar"]
+    if bar then
+        bar:SetFrameLevel(base + 2)
+        for _, child in ipairs({ bar:GetChildren() }) do child:SetFrameLevel(base + 3) end
+    end
+
+    for _, header in ipairs(headerPool) do header:SetFrameLevel(base + 2) end
+    for _, row in ipairs(rowPool) do
+        row:SetFrameLevel(base + 2)
+        row.menuBtn:SetFrameLevel(base + 3)
+        row.activateBtn:SetFrameLevel(base + 3)
+        row.onBtn:SetFrameLevel(base + 3)
+        row.offBtn:SetFrameLevel(base + 3)
     end
 end
 
+local DIALOG_BACKDROP = {
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 },
+}
+
+-- La bordure de dialogue a des coins de 32 : sur une languette de 40, ils se chevauchent.
+local TAB_BACKDROP = {
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 },
+}
+
+local GLASS_BACKDROP = {
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    tile = true, tileSize = 16,
+}
+
+-- Un addon ne peut pas flouter ce qui est dessine dessous : le verre du mode compact est
+-- un voile noir, un grain etire par-dessus, et un fondu sur le bord qui touche l'arbre.
+local function ApplyLook(compact, collapsed, side)
+    if compact then
+        panel:SetBackdrop(GLASS_BACKDROP)
+        panel:SetBackdropColor(0, 0, 0, GLASS_ALPHA)
+        grain:Show()
+    else
+        panel:SetBackdrop(collapsed and TAB_BACKDROP or DIALOG_BACKDROP)
+        panel:SetBackdropColor(0, 0, 0, 0.85)
+        grain:Hide()
+    end
+
+    -- Le fondu deborde du panneau vers l'arbre : il adoucit la coupure sans agrandir la
+    -- zone qui capte la souris.
+    if compact and not collapsed then
+        local inner = (side == "LEFT") and "RIGHT" or "LEFT"
+        fade:ClearAllPoints()
+        fade:SetPoint("TOP" .. side, panel, "TOP" .. inner)
+        fade:SetPoint("BOTTOM" .. side, panel, "BOTTOM" .. inner)
+        fade:SetWidth(GLASS_FADE_WIDTH)
+        if side == "LEFT" then
+            fade:SetGradientAlpha("HORIZONTAL", 0, 0, 0, GLASS_ALPHA, 0, 0, 0, 0)
+        else
+            fade:SetGradientAlpha("HORIZONTAL", 0, 0, 0, 0, 0, 0, 0, GLASS_ALPHA)
+        end
+        fade:Show()
+    else
+        fade:Hide()
+    end
+end
+
+local function ApplyLayout()
+    if not (panel and _G.skillTreeFrame) then return end
+
+    local compact = NS.Data.IsCompact()
+    local collapsed = NS.Data.IsPanelCollapsed()
+    local side = NS.Data.GetPanelSide()
+    local window = GetTreeWindow()
+    local width = collapsed and TAB_WIDTH or PANEL_WIDTH
+
+    -- Dedans, le panneau ne deborde plus : la fenetre n'a pas a s'ecarter.
+    SetWindowShift(window, (not compact and side == "LEFT") and (width + PANEL_GAP) or 0)
+
+    -- En mode compact, le panneau est un enfant de l'arbre : il s'intercale entre ses
+    -- couches et le suit quand la fenetre passe au premier plan. Dehors, il reste en
+    -- DIALOG : sur un ecran trop etroit, le clamp le fait mordre sur la fenetre, qui est
+    -- en HIGH et se remet au premier plan de sa strate des qu'on la clique.
+    local host = compact and skillTreeFrame or UIParent
+    if panel:GetParent() ~= host then panel:SetParent(host) end
+    panel:SetFrameStrata(compact and skillTreeFrame:GetFrameStrata() or "DIALOG")
+
+    -- Dehors, le panneau touche la fenetre par son flanc oppose. Dedans, il se cale sur
+    -- le bord de la vue de l'arbre, qui s'arrete au-dessus de la barre du bas — la vue
+    -- telle qu'Ebonhold la pose : l'apercu en fait reculer le coin haut-gauche, et le
+    -- panneau ne doit pas le suivre.
+    local anchor, panelEdge, anchorEdge, x, topY, bottomY
+    if compact then
+        panelEdge, anchorEdge = side, side
+        local frame, insetLeft, insetTop, insetRight, insetBottom = NS.View.GetViewInsets()
+        if frame then
+            anchor, topY, bottomY = frame, insetTop, insetBottom
+            x = (side == "LEFT") and insetLeft or insetRight
+        else
+            anchor, x, topY, bottomY = _G.skillTreeScroll or skillTreeFrame, 0, 0, 0
+        end
+    else
+        anchor, anchorEdge = window, side
+        panelEdge = (side == "LEFT") and "RIGHT" or "LEFT"
+        x, topY, bottomY = (side == "LEFT") and -PANEL_GAP or PANEL_GAP, 0, 0
+    end
+
+    panel:ClearAllPoints()
+    panel:SetWidth(width)
+    panel:SetPoint("TOP" .. panelEdge, anchor, "TOP" .. anchorEdge, x, topY)
+    if collapsed then
+        panel:SetHeight(TAB_HEIGHT)
+    else
+        panel:SetPoint("BOTTOM" .. panelEdge, anchor, "BOTTOM" .. anchorEdge, x, bottomY)
+    end
+
+    ApplyLook(compact, collapsed, side)
+
+    -- Replie, le panneau n'est plus qu'une languette : seul le bouton qui le rouvre reste.
+    collapseBtn:ClearAllPoints()
+    collapseBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", collapsed and 6 or 36, -8)
+    collapseBtn:SetText(collapsed and L.BTN_EXPAND or L.BTN_COLLAPSE)
+    if collapsed then
+        sideBtn:Hide()
+        menuBtn:Hide()
+        scroll:Hide()
+    else
+        sideBtn:Show()
+        menuBtn:Show()
+        scroll:Show()
+    end
+
+    ApplyLevels()
+
+    -- En mode compact deplie, la vue se centre sur ce que le panneau laisse libre.
+    NS.View.SetCovered(side, (compact and not collapsed) and PANEL_WIDTH or 0)
+end
+
+function UI.SetCompact(enabled)
+    NS.Data.SetCompact(enabled)
+    ApplyLayout()
+    UI.RefreshList()
+end
+
 local function CreateHeaderButtons()
-    local sideBtn = CreateFrame("Button", "STAL_SideBtn", panel, "UIPanelButtonTemplate2")
+    sideBtn = CreateFrame("Button", "STAL_SideBtn", panel, "UIPanelButtonTemplate2")
     sideBtn:SetSize(28, 20)
     sideBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -8)
     sideBtn:SetText(L.BTN_SIDE)
     sideBtn:SetScript("OnClick", function()
         NS.Data.SetPanelSide((NS.Data.GetPanelSide() == "RIGHT") and "LEFT" or "RIGHT")
-        PositionPanel()
+        ApplyLayout()
     end)
 
-    local menuBtn = CreateFrame("Button", "STAL_PanelMenuBtn", panel, "UIPanelButtonTemplate2")
+    -- Sa place et son libelle dependent de l'etat replie : ApplyLayout les pose.
+    collapseBtn = CreateFrame("Button", "STAL_CollapseBtn", panel, "UIPanelButtonTemplate2")
+    collapseBtn:SetSize(28, 20)
+    collapseBtn:SetScript("OnClick", function()
+        NS.Data.SetPanelCollapsed(not NS.Data.IsPanelCollapsed())
+        ApplyLayout()
+    end)
+
+    menuBtn = CreateFrame("Button", "STAL_PanelMenuBtn", panel, "UIPanelButtonTemplate2")
     menuBtn:SetSize(28, 20)
     menuBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -8)
     menuBtn:SetText(L.BTN_PANEL_MENU)
@@ -485,7 +765,7 @@ local function CreateHeaderButtons()
 end
 
 local function CreateScrollArea()
-    local scroll = CreateFrame("ScrollFrame", "STAL_PanelScroll", panel, "UIPanelScrollFrameTemplate")
+    scroll = CreateFrame("ScrollFrame", "STAL_PanelScroll", panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -34)
     scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -SCROLL_MARGIN_RIGHT, SCROLL_MARGIN_BOTTOM)
 
@@ -494,7 +774,9 @@ local function CreateScrollArea()
     scrollChild:SetHeight(1)
     scroll:SetScrollChild(scrollChild)
 
-    emptyText = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    -- Porte par la zone de defilement, pas par le panneau : il disparait avec elle
+    -- quand le panneau se replie.
+    emptyText = scroll:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     emptyText:SetPoint("TOP", scroll, "TOP", 0, -10)
     emptyText:SetWidth(PANEL_WIDTH - 30)
     emptyText:SetText(L.EMPTY_LIST)
@@ -504,21 +786,22 @@ local function BuildPanel()
     if panel or not _G.skillTreeFrame then return end
 
     panel = CreateFrame("Frame", "STAL_Panel", UIParent)
-    panel:SetWidth(PANEL_WIDTH)
-    panel:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    panel:SetBackdropColor(0, 0, 0, 0.85)
-
-    -- Quand l'ecran est trop etroit pour la fenetre et le panneau cote a cote, le
-    -- clamp fait mordre le panneau sur la fenetre. Il doit alors passer devant elle :
-    -- CollectionsJournal est en HIGH et se remet au premier plan de sa strate des
-    -- qu'on le clique, seule une strate au-dessus tient.
-    panel:SetFrameStrata("DIALOG")
     panel:SetClampedToScreen(true)
+    NS.View.Attach(panel)
+
+    -- Le panneau capte la souris sur toute sa surface, molette comprise : en mode
+    -- compact, un clic entre deux lignes ou un tour de molette n'atteint pas l'arbre.
+    panel:EnableMouse(true)
+    panel:EnableMouseWheel(true)
+    panel:SetScript("OnMouseWheel", function() end)
+
+    grain = panel:CreateTexture(nil, "BORDER")
+    grain:SetAllPoints(panel)
+    grain:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    grain:SetAlpha(GLASS_GRAIN_ALPHA)
+
+    fade = panel:CreateTexture(nil, "BACKGROUND")
+    fade:SetTexture("Interface\\Buttons\\WHITE8X8")
 
     CreateHeaderButtons()
     CreateScrollArea()
@@ -548,8 +831,8 @@ local function ShowPanel()
     if not panel then return end
 
     -- A chaque ouverture et pas seulement a la creation : la fenetre a ete rendue a sa
-    -- place a la fermeture de l'arbre, il faut lui redemander de s'ecarter.
-    PositionPanel()
+    -- place a la fermeture de l'arbre, et ses niveaux ont pu bouger depuis.
+    ApplyLayout()
     panel:Show()
     NS.Core.InvalidateSnapshot()
     UI.RefreshList()
@@ -558,6 +841,8 @@ end
 local function HidePanel()
     NS.Overlay.Hide()
     if panel then panel:Hide() end
+
+    NS.View.Cancel()
 
     -- Changer d'onglet cache l'arbre sans fermer la fenetre : les autres onglets la
     -- retrouvent a sa place.
@@ -569,6 +854,7 @@ function UI.Init()
 
     skillTreeFrame:HookScript("OnShow", ShowPanel)
     skillTreeFrame:HookScript("OnHide", HidePanel)
+    NS.View.Init()
 
     -- IsVisible et non IsShown : l'onglet de l'arbre reste "montre" fenetre fermee.
     if skillTreeFrame:IsVisible() then ShowPanel() end

@@ -78,6 +78,44 @@ function Plan.ComputeMissing(targets, snapshot)
     return missing, count
 end
 
+local function PushLinked(linked, set, seen, stack)
+    for i = 1, (linked and #linked or 0) do
+        local nodeId = linked[i]
+        if set[nodeId] and not seen[nodeId] then
+            seen[nodeId] = true
+            stack[#stack + 1] = nodeId
+        end
+    end
+end
+
+-- La plus grande grappe de noeuds de `set` relies entre eux par l'arbre, parents ou
+-- enfants. L'apercu s'y rabat quand une save ne tient pas dans la vue : c'est la
+-- branche la plus fournie qu'il montre. Sans graphe, on rend l'ensemble tel quel.
+function Plan.LargestGroup(set)
+    if not BuildGraph() then return set end
+
+    local seen, best, bestSize = {}, set, 0
+    for startId in pairs(set) do
+        if not seen[startId] then
+            seen[startId] = true
+            local group, size, stack = {}, 0, { startId }
+
+            while #stack > 0 do
+                local nodeId = stack[#stack]
+                stack[#stack] = nil
+                group[nodeId] = set[nodeId]
+                size = size + 1
+                PushLinked(parentsOf[nodeId], set, seen, stack)
+                PushLinked(childrenOf[nodeId], set, seen, stack)
+            end
+
+            if size > bestSize then best, bestSize = group, size end
+        end
+    end
+
+    return best
+end
+
 -- Avancement d'une save, pondere par les cendres et non par le nombre de noeuds :
 -- les premiers coutent 50, les derniers 52 500. Compter les noeuds annoncerait une
 -- save presque finie alors qu'il reste l'essentiel de la facture a payer.

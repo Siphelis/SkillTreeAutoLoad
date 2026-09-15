@@ -6,6 +6,8 @@ L.BTN_ACTIVATE = "Aktivieren"
 L.BTN_PANEL_MENU = "..."
 L.MENU_NEW_SAVE = "Neuer Speicherstand"
 L.MENU_NEW_GROUP = "Neue Gruppe"
+L.MENU_COMPACT = "Kompaktmodus"
+L.MENU_PREVIEW_CAMERA = "Baum beim Überfahren ausrichten"
 L.UNGROUPED = "Ohne Kategorie"
 L.EMPTY_LIST = "Noch kein Speicherstand. Nutze das Menü '...', um den aktuellen Zustand des Baums zu sichern."
 
