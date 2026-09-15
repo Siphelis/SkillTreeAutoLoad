@@ -9,6 +9,7 @@ local UI = {}
 NS.UI = UI
 
 local PANEL_WIDTH = 275
+local PANEL_GAP = 6
 local ROW_HEIGHT = 54
 local ROW_SPACING = 3
 local GROUP_HEADER_HEIGHT = 22
@@ -413,15 +414,54 @@ function UI.RefreshList()
     if layout.headers == 0 then emptyText:Show() else emptyText:Hide() end
 end
 
+-- La fenetre qui porte l'arbre : son ancetre juste sous UIParent. Depuis que l'arbre
+-- est un onglet de CollectionsJournal, ses bords ne sont plus ceux de la fenetre, et
+-- c'est contre la fenetre que le panneau doit se poser.
+local function GetTreeWindow()
+    local window, parent = skillTreeFrame, skillTreeFrame:GetParent()
+    while parent and parent ~= UIParent do
+        window, parent = parent, parent:GetParent()
+    end
+    return window
+end
+
+-- CollectionsJournal est range par le gestionnaire de panneaux de Blizzard, colle au
+-- bord gauche de l'ecran : a gauche, le panneau n'a jamais la place. Deplacer la
+-- fenetre a la main ne tiendrait pas, le gestionnaire la replace a chaque panneau
+-- ouvert ou ferme. On lui demande donc de la ranger plus a droite, par l'xoffset de
+-- sa mise en page, et on rend la valeur d'origine des que l'arbre se ferme : les
+-- autres onglets partagent la fenetre.
+local xOffsetBase
+
+local function SetWindowShift(window, shift)
+    if not window:GetAttribute("UIPanelLayout-defined") then return end
+
+    local current = window:GetAttribute("UIPanelLayout-xoffset") or 0
+    xOffsetBase = xOffsetBase or current
+
+    local wanted = xOffsetBase + shift
+    if shift == 0 then xOffsetBase = nil end
+    if current == wanted then return end
+
+    window:SetAttribute("UIPanelLayout-xoffset", wanted)
+    if window:IsShown() then UpdateUIPanelPositions(window) end
+end
+
 local function PositionPanel()
     if not (panel and _G.skillTreeFrame) then return end
+
+    local window = GetTreeWindow()
+    local side = NS.Data.GetPanelSide()
+
+    SetWindowShift(window, (side == "LEFT") and (PANEL_WIDTH + PANEL_GAP) or 0)
+
     panel:ClearAllPoints()
-    if NS.Data.GetPanelSide() == "LEFT" then
-        panel:SetPoint("TOPRIGHT", skillTreeFrame, "TOPLEFT", -6, 0)
-        panel:SetPoint("BOTTOMRIGHT", skillTreeFrame, "BOTTOMLEFT", -6, 0)
+    if side == "LEFT" then
+        panel:SetPoint("TOPRIGHT", window, "TOPLEFT", -PANEL_GAP, 0)
+        panel:SetPoint("BOTTOMRIGHT", window, "BOTTOMLEFT", -PANEL_GAP, 0)
     else
-        panel:SetPoint("TOPLEFT", skillTreeFrame, "TOPRIGHT", 6, 0)
-        panel:SetPoint("BOTTOMLEFT", skillTreeFrame, "BOTTOMRIGHT", 6, 0)
+        panel:SetPoint("TOPLEFT", window, "TOPRIGHT", PANEL_GAP, 0)
+        panel:SetPoint("BOTTOMLEFT", window, "BOTTOMRIGHT", PANEL_GAP, 0)
     end
 end
 
@@ -472,7 +512,13 @@ local function BuildPanel()
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
     panel:SetBackdropColor(0, 0, 0, 0.85)
-    panel:SetFrameStrata("MEDIUM")
+
+    -- Quand l'ecran est trop etroit pour la fenetre et le panneau cote a cote, le
+    -- clamp fait mordre le panneau sur la fenetre. Il doit alors passer devant elle :
+    -- CollectionsJournal est en HIGH et se remet au premier plan de sa strate des
+    -- qu'on le clique, seule une strate au-dessus tient.
+    panel:SetFrameStrata("DIALOG")
+    panel:SetClampedToScreen(true)
 
     CreateHeaderButtons()
     CreateScrollArea()
@@ -495,13 +541,15 @@ local function BuildPanel()
             UI.RefreshList()
         end
     end)
-
-    PositionPanel()
 end
 
 local function ShowPanel()
     BuildPanel()
     if not panel then return end
+
+    -- A chaque ouverture et pas seulement a la creation : la fenetre a ete rendue a sa
+    -- place a la fermeture de l'arbre, il faut lui redemander de s'ecarter.
+    PositionPanel()
     panel:Show()
     NS.Core.InvalidateSnapshot()
     UI.RefreshList()
@@ -510,6 +558,10 @@ end
 local function HidePanel()
     NS.Overlay.Hide()
     if panel then panel:Hide() end
+
+    -- Changer d'onglet cache l'arbre sans fermer la fenetre : les autres onglets la
+    -- retrouvent a sa place.
+    SetWindowShift(GetTreeWindow(), 0)
 end
 
 function UI.Init()
@@ -518,5 +570,6 @@ function UI.Init()
     skillTreeFrame:HookScript("OnShow", ShowPanel)
     skillTreeFrame:HookScript("OnHide", HidePanel)
 
-    if skillTreeFrame:IsShown() then ShowPanel() end
+    -- IsVisible et non IsShown : l'onglet de l'arbre reste "montre" fenetre fermee.
+    if skillTreeFrame:IsVisible() then ShowPanel() end
 end
