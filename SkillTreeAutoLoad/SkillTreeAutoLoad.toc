@@ -3,7 +3,7 @@
 ## Notes: Save and restore Skill Tree configurations (ProjectEbonhold)
 ## OptionalDeps: ProjectEbonhold
 ## Author: Siphelis
-## Version: 1.7.1-0
+## Version: 1.7.1
 ## X-License: PolyForm Strict License 1.0.0
 ## SavedVariables: SkillTreeAutoLoadAccountDB
 ## SavedVariablesPerCharacter: SkillTreeAutoLoadDB
