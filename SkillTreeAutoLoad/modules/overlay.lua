@@ -31,6 +31,8 @@ local function GetMark(nodeId)
 
     mark = CreateFrame("Frame", nil, button)
     mark.button = button
+    mark.size = 0
+    mark:SetPoint("CENTER", button, "CENTER", 0, 0)
     mark:SetFrameLevel(button:GetFrameLevel() + MARK_LEVEL)
     mark:Hide()
 
@@ -48,20 +50,22 @@ local function CurrentZoom()
     return canvas and canvas:GetScale() or 1
 end
 
--- La marque deborde du bouton de MARK_INSET au zoom du joueur, et de ce qu'il faut
--- pour garder MARK_MIN_SIZE a l'ecran quand le canevas rapetisse.
+-- La marque deborde du bouton de MARK_INSET au zoom du joueur, et de ce qu'il faut pour
+-- garder MARK_MIN_SIZE a l'ecran quand le canevas rapetisse. Centree une fois pour
+-- toutes, elle se redimensionne d'un seul appel, et seulement si sa taille a change :
+-- des centaines de marques sont reposees a chaque affichage.
 local function PlaceMark(mark, zoom)
-    local button = mark.button
-    local inset = math.max(MARK_INSET, (MARK_MIN_SIZE / zoom - button:GetWidth()) / 2)
+    local width = mark.button:GetWidth()
+    local size = math.max(width + 2 * MARK_INSET, MARK_MIN_SIZE / zoom)
+    if size == mark.size then return end
 
-    mark:ClearAllPoints()
-    mark:SetPoint("TOPLEFT", button, "TOPLEFT", -inset, inset)
-    mark:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", inset, -inset)
+    mark.size = size
+    mark:SetSize(size, size)
 end
 
 local function Mark(nodeId, r, g, b, alpha)
     local mark = GetMark(nodeId)
-    if not mark then return end
+    if not mark then return false end
 
     PlaceMark(mark, CurrentZoom())
     mark.texture:SetVertexColor(r, g, b)
@@ -69,6 +73,7 @@ local function Mark(nodeId, r, g, b, alpha)
     mark:Show()
 
     shown[#shown + 1] = mark
+    return true
 end
 
 function Overlay.Hide()
@@ -90,17 +95,25 @@ end
 -- loin, un ambre attenue disparaissait, et c'est justement l'ampleur de ce qui reste a
 -- prendre que la vue d'ensemble doit montrer. En mode complet `affordable` vaut nil :
 -- il n'y a rien a departager, une seule couleur suffit.
+-- Rend le nombre de noeuds qu'elle n'a pas pu montrer, faute de bouton dans l'arbre
+-- affiche : ceux-la ne sont ni marques, ni cadres, ni activables, et le joueur ne
+-- comprendrait pas pourquoi sa save annonce un reste que rien ne designe.
 function Overlay.Show(missing, affordable)
     Overlay.Hide()
-    if not missing then return end
+    if not missing then return 0 end
 
+    local skipped = 0
     for nodeId in pairs(missing) do
+        local marked
         if not affordable then
-            Mark(nodeId, 1, 0.82, 0, 0.85)
+            marked = Mark(nodeId, 1, 0.82, 0, 0.85)
         elseif affordable[nodeId] then
-            Mark(nodeId, 0.3, 1, 0.3, 1)
+            marked = Mark(nodeId, 0.3, 1, 0.3, 1)
         else
-            Mark(nodeId, 1, 0.65, 0.1, 1)
+            marked = Mark(nodeId, 1, 0.65, 0.1, 1)
         end
+        if not marked then skipped = skipped + 1 end
     end
+
+    return skipped
 end

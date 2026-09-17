@@ -39,6 +39,31 @@ local ApplyLevels
 
 local layout = { y = 0, headers = 0, rows = 0, snapshot = nil, available = nil }
 
+-- Ligne dont l'infobulle est posee : passer d'une ligne a l'un de ses boutons ne doit
+-- rien reconstruire. Remise a nil des que la liste change.
+local tooltipRow
+
+-- Cout et avancement d'une save ne dependent que de l'arbre. Tant que sa lecture n'a pas
+-- change, on les relit ici plutot que de reparcourir ses 800 noeuds — pour chaque ligne,
+-- a chaque clic du joueur dans l'arbre, qui bouge le solde et redessine la liste.
+local savePlans = {}
+
+local function GetSavePlan(saveId, save, snapshot)
+    local stamp = NS.Core.GetSnapshotStamp()
+    local plan = savePlans[saveId]
+    if plan and plan.stamp == stamp then return plan end
+
+    plan = plan or {}
+    plan.totalCost, plan.pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
+    plan.ownedCost, plan.saveCost, plan.ownedNodes, plan.totalNodes =
+        NS.Plan.ComputeProgress(save.nodeRanks, snapshot)
+
+    -- Un arbre illisible ne se met pas en cache : la prochaine lecture doit reessayer.
+    plan.stamp = plan.totalCost and stamp or nil
+    savePlans[saveId] = plan
+    return plan
+end
+
 local function ActivateSave(saveId)
     local save = NS.Data.GetSave(saveId)
     if not save then return end
@@ -191,14 +216,19 @@ local function ShowRowTooltip(self)
     local save = row.saveId and NS.Data.GetSave(row.saveId)
     if not save then return end
 
+    -- Deja pose pour cette ligne : la souris n'a fait que passer sur l'un de ses boutons.
+    if tooltipRow == row then return end
+    tooltipRow = row
+
     local snapshot = NS.Core.GetTreeSnapshot()
 
     -- Ce que la save ajouterait ne sert qu'ici, au survol : le calculer pour chaque
     -- ligne a chaque rafraichissement revenait a preparer une table par save pour
     -- celle, au plus, que le joueur allait survoler. `affordable` vient de la ligne,
     -- lui : c'est le plan que son texte annonce, il doit rester celui-la.
+    -- L'apercu decide quand poser les cadres : pendant qu'il deplace la vue, ils
+    -- couteraient un redimensionnement par palier de zoom, des centaines a la fois.
     local missing = snapshot and NS.Plan.ComputeMissing(save.nodeRanks, snapshot)
-    NS.Overlay.Show(missing, row.affordable)
     NS.View.Preview(row.saveId, missing, row.affordable)
 
     -- Posee apres Show : c'est Show qui donne sa taille a l'infobulle, et il faut la
@@ -217,17 +247,16 @@ local function ShowRowTooltip(self)
     end
     GameTooltip:SetText(save.name, 1, 1, 1, 1, stacked)
 
-    local totalCost, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, snapshot)
+    local plan = GetSavePlan(row.saveId, save, snapshot)
+    local totalCost, pendingNodes = plan.totalCost, plan.pendingNodes
     if not totalCost then
         GameTooltip:AddLine(L.TOOLTIP_READ_FAILED, 1, 0.3, 0.3, stacked)
     elseif pendingNodes == 0 then
         GameTooltip:AddLine(L.ROW_ACTIVE, 0.25, 1, 0.25, stacked)
     else
-        local ownedCost, saveCost, ownedNodes, totalNodes =
-            NS.Plan.ComputeProgress(save.nodeRanks, snapshot)
-        if ownedCost then
-            GameTooltip:AddLine(string.format(L.TOOLTIP_PROGRESS, ownedNodes, totalNodes,
-                FormatCost(ownedCost), FormatCost(saveCost)), 0.8, 0.8, 0.8, stacked)
+        if plan.ownedCost then
+            GameTooltip:AddLine(string.format(L.TOOLTIP_PROGRESS, plan.ownedNodes, plan.totalNodes,
+                FormatCost(plan.ownedCost), FormatCost(plan.saveCost)), 0.8, 0.8, 0.8, stacked)
         end
 
         GameTooltip:AddLine(string.format(L.TOOLTIP_COST, FormatCost(totalCost)), 1, 0.82, 0, stacked)
@@ -262,7 +291,14 @@ local function ShowRowTooltip(self)
     end
 end
 
-local function HideRowTooltip()
+local function HideRowTooltip(self)
+    -- Glisser de la ligne a l'un de ses boutons, ou l'inverse, n'est pas un depart : tout
+    -- defaire puis tout refaire a chaque mouvement dans la ligne coutait, sur une grosse
+    -- save, des milliers d'appels et une transition relancee.
+    local row = self and (self.row or self)
+    if row and row:IsMouseOver() then return end
+
+    tooltipRow = nil
     GameTooltip:Hide()
     if GameTooltip.SetMinimumWidth then GameTooltip:SetMinimumWidth(0) end
     NS.Overlay.Hide()
@@ -440,10 +476,8 @@ local function LayoutSaveRow(saveId)
     local progressive = save.progressive == true
     SetRowMode(row, progressive)
 
-    local totalCost, pendingNodes
-    if layout.snapshot then
-        totalCost, pendingNodes = NS.Core.ComputeActivationPlan(save.nodeRanks, layout.snapshot)
-    end
+    local plan = layout.snapshot and GetSavePlan(saveId, save, layout.snapshot)
+    local totalCost, pendingNodes = plan and plan.totalCost, plan and plan.pendingNodes
 
     -- Le plan que l'overlay peindra en vert au survol. Reste nil en mode complet :
     -- rien a departager, une seule couleur sur l'arbre.
@@ -458,7 +492,7 @@ local function LayoutSaveRow(saveId)
         row.costText:SetText(Colorize(COLOR.SUCCESS, L.ROW_ACTIVE))
         SetRowFill(row, 1)
     else
-        local ownedCost, saveCost = NS.Plan.ComputeProgress(save.nodeRanks, layout.snapshot)
+        local ownedCost, saveCost = plan.ownedCost, plan.saveCost
         SetRowFill(row, (ownedCost and saveCost and saveCost > 0) and (ownedCost / saveCost) or 0)
 
         if progressive then
@@ -518,6 +552,12 @@ end
 
 function UI.RefreshList()
     if not scrollChild then return end
+
+    -- Le contenu des lignes va changer : l'infobulle deja posee ne vaut plus.
+    tooltipRow = nil
+
+    -- Replie, la liste n'est pas a l'ecran : on la redessinera au deploiement.
+    if NS.Data.IsPanelCollapsed() then return end
 
     layout.y = -2
     layout.headers = 0
@@ -753,6 +793,8 @@ local function CreateHeaderButtons()
     collapseBtn:SetScript("OnClick", function()
         NS.Data.SetPanelCollapsed(not NS.Data.IsPanelCollapsed())
         ApplyLayout()
+        -- La liste ne se redessine pas tant qu'elle est repliee : elle se rattrape ici.
+        UI.RefreshList()
     end)
 
     menuBtn = CreateFrame("Button", "STAL_PanelMenuBtn", panel, "UIPanelButtonTemplate2")
@@ -840,6 +882,7 @@ end
 
 local function HidePanel()
     NS.Overlay.Hide()
+    tooltipRow = nil
     if panel then panel:Hide() end
 
     NS.View.Cancel()

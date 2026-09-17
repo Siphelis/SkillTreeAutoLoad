@@ -9,6 +9,7 @@ local nodeButtons = {}
 local warnedMultiChoice = false
 local buttonsReady = false
 local snapshotCache, snapshotTime
+local snapshotStamp = 0
 
 local function GetNodeDefs()
     if nodeDefsById then return nodeDefsById end
@@ -67,6 +68,15 @@ local function ReadNodeRank(node)
     local btn = GetNodeButton(node.id)
     if not btn or btn.state == "locked" then return 0 end
 
+    -- Un noeud infini laisse rankText vide et n'est jamais « active » : son rang ne se
+    -- lit que dans le badge du coin, affiche des le premier rang. Sans cette lecture, ses
+    -- rangs sont invisibles, et avec eux les cendres qu'ils ont coute.
+    if node.infinite then
+        local badge = btn.stackBadge
+        if not (badge and badge:IsShown()) then return 0 end
+        return tonumber(badge.count:GetText()) or 0
+    end
+
     -- Le motif est ancre sur un chiffre : si le premier octet n'en est pas un, la
     -- recherche ne peut qu'echouer. ProjectEbonhold n'ecrit « n/m » que sur les
     -- noeuds a plusieurs rangs et pose une coche sur tous les autres — ce test
@@ -103,7 +113,15 @@ function Core.GetTreeSnapshot()
     end
 
     snapshotCache, snapshotTime = snapshot, GetTime()
+    snapshotStamp = snapshotStamp + 1
     return snapshot
+end
+
+-- Change des qu'une lecture neuve de l'arbre a eu lieu. Ce qui ne depend que de l'arbre —
+-- le cout d'une save, son avancement — se garde d'un rafraichissement a l'autre tant que
+-- ce numero ne bouge pas, au lieu de reparcourir 800 noeuds par ligne a chaque clic.
+function Core.GetSnapshotStamp()
+    return snapshotStamp
 end
 
 function Core.CaptureTreeState()
@@ -111,8 +129,13 @@ function Core.CaptureTreeState()
     local snapshot, err = Core.GetTreeSnapshot()
     if not snapshot then return nil, err end
 
+    -- Les noeuds infinis restent un choix manuel : ils comptent dans le solde, jamais
+    -- dans une save.
+    local defs = GetNodeDefs()
     local copy = {}
-    for nodeId, rank in pairs(snapshot) do copy[nodeId] = rank end
+    for nodeId, rank in pairs(snapshot) do
+        if not defs[nodeId].infinite then copy[nodeId] = rank end
+    end
     return copy
 end
 
@@ -142,6 +165,20 @@ function Core.GetAvailableSoulAshes()
     return (sign == "-") and -value or value
 end
 
+local INFINITE_RANK_COST_CAP = 100000000
+
+-- Meme formule que getNodeCost cote ProjectEbonhold, qui la recopie du serveur : un
+-- rang infini coute 1,25 fois le precedent, plafonne a 100 M.
+local function RankCost(node, rank)
+    local costs = node.soulPointsCosts or {}
+    if not node.infinite then return costs[rank] or 0 end
+
+    local base = math.max(costs[1] or 1, 1)
+    local cost = math.ceil(base * (node.infiniteGrowth or 1.15) ^ (rank - 1) - 0.000001)
+    if cost >= INFINITE_RANK_COST_CAP then return INFINITE_RANK_COST_CAP end
+    return math.max(cost, 1)
+end
+
 -- Rend le prix de la save et le nombre de noeuds qu'elle ajouterait. Pas la liste
 -- de ces noeuds : aucun appelant n'en lisait le detail, tous s'arretaient a leur
 -- nombre. La construire coutait une table par noeud puis un tri complet, a chaque
@@ -160,9 +197,8 @@ function Core.ComputeActivationPlan(saveNodeRanks, snapshot)
         if node then
             local currentRank = snapshot[nodeId] or 0
             if currentRank < targetRank then
-                local costs = node.soulPointsCosts or {}
                 for rankIdx = currentRank + 1, targetRank do
-                    totalCost = totalCost + (costs[rankIdx] or 0)
+                    totalCost = totalCost + RankCost(node, rankIdx)
                 end
                 pendingNodes = pendingNodes + 1
             end

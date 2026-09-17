@@ -46,13 +46,22 @@ local padX, padY = 0, 0
 -- Apercu. `origin` est la vue du joueur avant le premier apercu, rendue quand la souris
 -- quitte le panneau ; `target` la save cadree ; `pending` celle qui attend son delai.
 local origin, target, pending, anim
-local hovering = false
+local hovering, warnedKey = false, nil
 local arrows = {}
 
 local function Clamp(value, low, high)
     if value < low then return low end
     if value > high then return high end
     return value
+end
+
+-- Mode diagnostic, eteint par defaut et bascule par /staldiag : il suit un apercu de bout
+-- en bout, du nombre de noeuds trouves jusqu'au defilement reellement applique.
+local debugging = false
+
+local function Diag(text, ...)
+    if not debugging then return end
+    NS.Log("|cff33ccff[diag]|r " .. string.format(text, ...))
 end
 
 local function TreeVisible()
@@ -182,32 +191,45 @@ local function ViewCenter()
         (view:GetVerticalScroll() - padY + (top + bottom) / 2) / zoom
 end
 
--- Tres dezoome, l'arbre devient plus petit que la vue : la position qui le centrerait
--- est negative, et c'est le recul du coin haut-gauche qui en tient lieu.
-local function PlaceView(cx, cy)
-    local view, zoom = skillTreeScroll, skillTreeCanvas:GetScale()
+-- Position de defilement qui amene le point (cx, cy) du canevas au centre de la zone
+-- libre, avant tout recul. Negative quand l'arbre, tres dezoome, est plus petit que la
+-- vue : c'est le recul du coin haut-gauche qui rattrape ce que le client refuse.
+local function ScrollTarget(cx, cy, zoom)
     local left, top, right, bottom = FreeRect()
-    local scrollX = cx * zoom - (left + right) / 2
-    local scrollY = cy * zoom - (top + bottom) / 2
+    return cx * zoom - (left + right) / 2, cy * zoom - (top + bottom) / 2
+end
 
-    SetPadding(math.max(0, -scrollX), math.max(0, -scrollY))
+-- Le recul, lui, est pose par l'appelant : le changer a chaque image redimensionne la
+-- vue, ce qui coute aussi cher qu'un changement d'echelle.
+local function PlaceView(cx, cy)
+    local view = skillTreeScroll
+    local scrollX, scrollY = ScrollTarget(cx, cy, skillTreeCanvas:GetScale())
 
     driving = true
-    view:SetHorizontalScroll(Clamp(scrollX, 0, math.max(0, view:GetHorizontalScrollRange())))
-    view:SetVerticalScroll(Clamp(scrollY, 0, math.max(0, view:GetVerticalScrollRange())))
+    view:SetHorizontalScroll(Clamp(scrollX + padX, 0, math.max(0, view:GetHorizontalScrollRange())))
+    view:SetVerticalScroll(Clamp(scrollY + padY, 0, math.max(0, view:GetVerticalScrollRange())))
     driving = false
 end
 
 -- Rectangle d'un noeud sur le canevas, y vers le bas. Ebonhold ancre chaque bouton par
--- son coin haut-gauche sur le canevas : le decalage de l'ancre est sa position.
+-- son coin haut-gauche sur le canevas : le decalage de l'ancre est sa position. Elle ne
+-- bouge plus une fois l'arbre construit — le zoom met le canevas a l'echelle, pas ses
+-- noeuds — et un cadrage en relit des centaines : on la retient.
+local nodeRects = {}
+
 local function NodeRect(nodeId)
+    local rect = nodeRects[nodeId]
+    if rect then return rect[1], rect[2], rect[3], rect[4] end
+
     local button = _G["skillTreeNode" .. nodeId]
     if not button then return nil end
 
     local _, _, _, x, y = button:GetPoint(1)
     if not x then return nil end
 
-    return x, -y, x + button:GetWidth(), -y + button:GetHeight()
+    rect = { x, -y, x + button:GetWidth(), -y + button:GetHeight() }
+    nodeRects[nodeId] = rect
+    return rect[1], rect[2], rect[3], rect[4]
 end
 
 local function Bounds(set)
@@ -238,7 +260,10 @@ end
 -- branche la plus fournie. Il ne zoome jamais plus pres que le joueur.
 local function ComputeFraming(missing, affordable)
     local minX, minY, maxX, maxY = Bounds(missing)
-    if not minX then return nil end
+    if not minX then
+        Diag("aucun noeud restant n'a de bouton dans l'arbre : rien a cadrer")
+        return nil
+    end
 
     local fit = FitZoom(minX, minY, maxX, maxY)
     if fit < SAFETY_MIN_ZOOM then
@@ -256,6 +281,10 @@ local function ComputeFraming(missing, affordable)
     end
 
     local zoom = math.max(SAFETY_MIN_ZOOM, math.min(origin.zoom, fit))
+
+    Diag("rectangle %.0f,%.0f -> %.0f,%.0f (%.0f x %.0f) | tient a %.2f | zoom joueur %.2f | zoom retenu %.2f",
+        minX, minY, maxX, maxY, maxX - minX, maxY - minY, fit, origin.zoom, zoom)
+
     return zoom, (minX + maxX) / 2, (minY + maxY) / 2
 end
 
@@ -354,14 +383,54 @@ local function Smooth(t)
     return t * t * (3 - 2 * t)
 end
 
+-- Les cadres ne vivent que sur une vue posee. Les garder pendant la transition obligeait
+-- a les redimensionner a chaque palier de zoom, des centaines a la fois, en plus du
+-- replacement de l'arbre : c'est ce cumul qui hachait le retour a la vue d'origine.
+local function ShowMarks()
+    if not (target and target.missing) then return end
+
+    local skipped = NS.Overlay.Show(target.missing, target.affordable)
+    ShowArrows(target.missing)
+
+    local view = skillTreeScroll
+    Diag("pose : zoom %.2f | defilement %.0f,%.0f | recul %.0f,%.0f | sans bouton %d",
+        skillTreeCanvas:GetScale(), view:GetHorizontalScroll(), view:GetVerticalScroll(),
+        padX, padY, skipped or 0)
+
+    -- Une seule fois par save : sinon chaque survol repeterait le message.
+    if skipped and skipped > 0 and warnedKey ~= target.key then
+        warnedKey = target.key
+        NS.LogWarn(string.format(NS.L.MSG_NODES_NOT_IN_TREE, skipped))
+    end
+end
+
 local function StartAnimation(zoom, cx, cy, restore)
+    local fromZoom = skillTreeCanvas:GetScale()
     local fromX, fromY = ViewCenter()
+
+    -- Changer l'echelle replace les ~3000 elements de l'arbre : une seule fois par
+    -- transition, et du cote ou elle se voit le moins. En s'eloignant, tout de suite ; en
+    -- se rapprochant, a l'arrivee. Le trajet se fait donc toujours a la plus petite des
+    -- deux echelles, la ou le mouvement est le plus lisible.
+    local zoomedOut = zoom < fromZoom
+    if zoomedOut then SetZoom(zoom) end
+
+    -- Recul pose une fois pour toute la transition, au plus large des deux besoins.
+    local panZoom = zoomedOut and zoom or fromZoom
+    local startX, startY = ScrollTarget(fromX, fromY, panZoom)
+    local endX, endY = ScrollTarget(cx, cy, panZoom)
+    SetPadding(math.max(0, -startX, -endX), math.max(0, -startY, -endY))
+
     anim = {
-        startedAt = GetTime(), restore = restore,
-        fromZoom = skillTreeCanvas:GetScale(), fromX = fromX, fromY = fromY,
-        toZoom = zoom, toX = cx, toY = cy,
+        startedAt = GetTime(), restore = restore, zoomedOut = zoomedOut,
+        fromX = fromX, fromY = fromY, toZoom = zoom, toX = cx, toY = cy,
     }
+
+    Diag("transition zoom %.2f -> %.2f | centre %.0f,%.0f -> %.0f,%.0f | defilement %.0f -> %.0f | recul %.0f,%.0f",
+        fromZoom, zoom, fromX, fromY, cx, cy, startX, endX, padX, padY)
+
     HideArrows()
+    NS.Overlay.Hide()
     driver:Show()
 end
 
@@ -392,6 +461,15 @@ local function FinishRestore()
 end
 
 local function FrameTarget()
+    if debugging then
+        local total, framed = 0, 0
+        for nodeId in pairs(target.missing) do
+            total = total + 1
+            if NodeRect(nodeId) then framed = framed + 1 end
+        end
+        Diag("save %s : %d noeud(s) restant(s), %d avec bouton", tostring(target.key), total, framed)
+    end
+
     if not origin then
         local view, canvas = skillTreeScroll, skillTreeCanvas
         origin = {
@@ -404,14 +482,20 @@ local function FrameTarget()
     end
 
     local zoom, cx, cy = ComputeFraming(target.missing, target.affordable)
-    if not zoom then return end
+    if not zoom then
+        -- Aucun des noeuds restants n'existe dans l'arbre affiche : il n'y a rien a
+        -- cadrer, et c'est ShowMarks qui le dira au joueur.
+        ShowMarks()
+        return
+    end
 
     local fromX, fromY = ViewCenter()
     local current = skillTreeCanvas:GetScale()
     if math.abs(zoom - current) < 0.001
         and math.abs(cx - fromX) * zoom < 1 and math.abs(cy - fromY) * zoom < 1 then
         anim = nil
-        ShowArrows(target.missing)
+        Diag("vue deja en place, aucun mouvement")
+        ShowMarks()
         return
     end
 
@@ -434,7 +518,15 @@ local function OnUpdate()
         local progress = math.min(1, (now - anim.startedAt) / TRANSITION)
         local eased = Smooth(progress)
 
-        SetZoom(anim.fromZoom + (anim.toZoom - anim.fromZoom) * eased)
+        -- Le zoom qui rapproche attendait l'arrivee : c'est ici qu'il se pose, avec le
+        -- recul que la nouvelle echelle demande. Un retour, lui, se termine par
+        -- FinishRestore, qui repose l'echelle, la taille et la vue exactes du joueur.
+        if progress >= 1 and not anim.zoomedOut and not anim.restore then
+            SetZoom(anim.toZoom)
+            local endX, endY = ScrollTarget(anim.toX, anim.toY, anim.toZoom)
+            SetPadding(math.max(0, -endX), math.max(0, -endY))
+        end
+
         PlaceView(anim.fromX + (anim.toX - anim.fromX) * eased,
             anim.fromY + (anim.toY - anim.fromY) * eased)
 
@@ -444,7 +536,7 @@ local function OnUpdate()
             if restore then
                 FinishRestore()
             elseif hovering and target then
-                ShowArrows(target.missing)
+                ShowMarks()
             end
         end
     end
@@ -500,6 +592,14 @@ function View.Attach(frame)
     panel = frame
 end
 
+-- Outil de mise au point, pas une fonctionnalite : il ne coute rien tant qu'il est
+-- eteint, et il n'a pas vocation a rester dans une version publiee.
+SLASH_STALDIAG1 = "/staldiag"
+SlashCmdList["STALDIAG"] = function()
+    debugging = not debugging
+    NS.Log("diagnostic de l'apercu : " .. (debugging and "actif" or "eteint"))
+end
+
 -- Ancrage de la vue tel qu'Ebonhold le pose, sans le recul de l'apercu : le panneau
 -- compact s'y cale, et ne doit pas suivre le coin haut-gauche quand il recule. Nil si
 -- l'ancrage n'a pas la forme attendue.
@@ -531,21 +631,27 @@ function View.Preview(key, missing, affordable)
 
     if not (driver and TreeVisible() and missing and next(missing)) then
         pending = nil
-        return
-    end
-
-    if not NS.Data.IsPreviewCamera() then
-        pending = nil
-        ShowArrows(missing)
+        NS.Overlay.Hide()
         return
     end
 
     local entry = { key = key, missing = missing, affordable = affordable }
 
+    -- Sans cadrage, rien a attendre : les cadres se posent sur la vue telle quelle.
+    if not NS.Data.IsPreviewCamera() then
+        target, pending = entry, nil
+        ShowMarks()
+        return
+    end
+
     if origin and target and target.key == key then
         target, pending = entry, nil
         FrameTarget()
     else
+        -- Les cadres de la save precedente n'ont plus lieu d'etre, et ceux de la nouvelle
+        -- attendent que la vue soit posee : les afficher pendant la transition revenait a
+        -- les redimensionner a chaque palier de zoom.
+        NS.Overlay.Hide()
         -- Glisser de la ligne a l'un de ses boutons ne relance pas le delai.
         entry.due = (pending and pending.key == key) and pending.due or (GetTime() + HOVER_DELAY)
         pending = entry

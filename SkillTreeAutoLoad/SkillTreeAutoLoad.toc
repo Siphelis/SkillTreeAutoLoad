@@ -1,9 +1,9 @@
 ## Interface: 30300
 ## Title: SkillTreeAutoLoad
-## Notes: Save and restore Soul Tree milestones (ProjectEbonhold)
+## Notes: Save and restore Skill Tree configurations (ProjectEbonhold)
 ## OptionalDeps: ProjectEbonhold
 ## Author: Siphelis
-## Version: 1.7.0
+## Version: 1.7.1-0
 ## X-License: PolyForm Strict License 1.0.0
 ## SavedVariables: SkillTreeAutoLoadAccountDB
 ## SavedVariablesPerCharacter: SkillTreeAutoLoadDB
