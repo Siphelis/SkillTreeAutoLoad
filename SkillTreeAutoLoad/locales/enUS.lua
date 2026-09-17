@@ -87,6 +87,11 @@ NS.L = {
     MSG_UPDATE_SHRINKS = "The current tree contains fewer nodes than the save: %d versus %d.",
     MSG_RELOADING = "Saving data to disk... Reloading the interface.",
 
+    BTN_UPDATE = "Update available",
+    TOOLTIP_UPDATE = "Version %s is available. Click to get the download link.",
+    MSG_UPDATE_AVAILABLE = "Version %s is available (installed: %s). Download:",
+    POPUP_UPDATE = "SkillTreeAutoLoad %s is available (installed: %s).\nPress Ctrl+C to copy the download link.",
+
     ERR_NO_DATABASE = "TalentDatabase unavailable",
     ERR_NO_GRAPH = "tree graph unavailable",
     ERR_TREE_NOT_READY = "Skill Tree not ready",

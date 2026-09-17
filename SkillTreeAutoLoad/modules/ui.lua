@@ -30,7 +30,7 @@ local TOGGLE_LABEL_WIDTH = 62
 local ROW_WIDTH = PANEL_WIDTH - 12 - SCROLL_MARGIN_RIGHT - 4
 
 local panel, scroll, scrollChild, emptyText
-local sideBtn, collapseBtn, menuBtn, grain, fade
+local sideBtn, collapseBtn, menuBtn, updateBtn, grain, fade
 local headerPool, rowPool = {}, {}
 
 -- Definie plus bas, pres de la disposition du panneau : RefreshList l'appelle pour
@@ -629,6 +629,7 @@ ApplyLevels = function()
     sideBtn:SetFrameLevel(base + 1)
     collapseBtn:SetFrameLevel(base + 1)
     menuBtn:SetFrameLevel(base + 1)
+    updateBtn:SetFrameLevel(base + 1)
     scroll:SetFrameLevel(base + 1)
     scrollChild:SetFrameLevel(base + 1)
 
@@ -764,6 +765,7 @@ local function ApplyLayout()
         menuBtn:Show()
         scroll:Show()
     end
+    UI.RefreshUpdateNotice()
 
     ApplyLevels()
 
@@ -804,6 +806,37 @@ local function CreateHeaderButtons()
     menuBtn:SetScript("OnClick", function(self)
         NS.Menus.ShowPanelMenu(self)
     end)
+
+    -- Occupe l'espace libre du bandeau, entre les boutons de gauche et le menu.
+    updateBtn = CreateFrame("Button", "STAL_UpdateBtn", panel)
+    updateBtn:SetHeight(20)
+    updateBtn:SetPoint("LEFT", collapseBtn, "RIGHT", 6, 0)
+    updateBtn:SetPoint("RIGHT", menuBtn, "LEFT", -6, 0)
+    updateBtn:SetNormalFontObject(GameFontNormalSmall)
+    updateBtn:SetText(Colorize(COLOR.WARN, L.BTN_UPDATE))
+    updateBtn:Hide()
+    updateBtn:SetScript("OnClick", function()
+        NS.Menus.ShowUpdateLink()
+    end)
+    updateBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(string.format(L.TOOLTIP_UPDATE, NS.Update.GetAvailable() or ""),
+            1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    updateBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+end
+
+function UI.RefreshUpdateNotice()
+    if not updateBtn then return end
+
+    if NS.Update.GetAvailable() and not NS.Data.IsPanelCollapsed() then
+        updateBtn:Show()
+    else
+        updateBtn:Hide()
+    end
 end
 
 local function CreateScrollArea()

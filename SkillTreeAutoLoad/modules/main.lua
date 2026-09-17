@@ -21,6 +21,9 @@ frame:SetScript("OnEvent", function(_, event, name)
     end
 
     Step("Data", NS.Data.Init)
+    -- Avant le controle d'Ebonhold : une version plus recente est peut-etre justement
+    -- celle qui le retrouve.
+    Step("Update", NS.Update.Init)
     if not _G.skillTreeFrame then
         NS.LogError(NS.L.MSG_NO_PROJECTEBONHOLD)
         return

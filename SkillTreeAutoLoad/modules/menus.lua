@@ -70,6 +70,42 @@ StaticPopupDialogs["STAL_CONFIRM"] = {
     preferredIndex = 3,
 }
 
+-- Un lien ne se clique pas dans ce client : on le donne pret a copier. Le champ
+-- revient au lien a chaque frappe, et maxLetters a 0 leve la limite laissee par
+-- le dernier dialogue a champ, qui partage le meme cadre.
+local function ResetLink(editBox)
+    if editBox:GetText() ~= NS.Update.URL then editBox:SetText(NS.Update.URL) end
+    editBox:HighlightText()
+end
+
+StaticPopupDialogs["STAL_UPDATE_LINK"] = {
+    text = L.POPUP_UPDATE,
+    button1 = L.POPUP_OK,
+    hasEditBox = true,
+    hasWideEditBox = true,
+    maxLetters = 0,
+    OnShow = function(self)
+        ResetLink(self.wideEditBox)
+        self.wideEditBox:SetFocus()
+    end,
+    EditBoxOnTextChanged = ResetLink,
+    EditBoxOnEnterPressed = function(self)
+        self:GetParent():Hide()
+    end,
+    EditBoxOnEscapePressed = function(self)
+        self:GetParent():Hide()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function Menus.ShowUpdateLink()
+    local version, installed = NS.Update.GetAvailable()
+    if version then StaticPopup_Show("STAL_UPDATE_LINK", version, installed) end
+end
+
 function Menus.PromptText(prompt, default, onAccept)
     StaticPopup_Show("STAL_INPUT_TEXT", prompt, nil,
         { default = default, onAccept = onAccept })

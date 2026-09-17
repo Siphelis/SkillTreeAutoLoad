@@ -88,6 +88,11 @@ L.MSG_INVALID_NAME = "Ce nom ne peut pas être utilisé. Aucune modification n'a
 L.MSG_UPDATE_SHRINKS = "L'arbre actuel contient moins de nœuds que la sauvegarde : %d contre %d."
 L.MSG_RELOADING = "Sauvegarde des données sur le disque… Rechargement de l'interface."
 
+L.BTN_UPDATE = "Mise à jour disponible"
+L.TOOLTIP_UPDATE = "La version %s est disponible. Cliquez pour obtenir le lien de téléchargement."
+L.MSG_UPDATE_AVAILABLE = "La version %s est disponible (installée : %s). Téléchargement :"
+L.POPUP_UPDATE = "SkillTreeAutoLoad %s est disponible (installée : %s).\nCtrl+C pour copier le lien de téléchargement."
+
 L.ERR_NO_DATABASE = "TalentDatabase est indisponible"
 L.ERR_NO_GRAPH = "le graphe de l'arbre est indisponible"
 L.ERR_TREE_NOT_READY = "le Skill Tree n'est pas prêt"

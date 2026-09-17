@@ -25,6 +25,7 @@ local function EnsureShape(db)
     if not IsTable(db.groups) then db.groups = {} end
     if not IsTable(db.saves) then db.saves = {} end
     if not IsTable(db.imported) then db.imported = {} end
+    if not IsTable(db.update) then db.update = {} end
     if type(db.nextId) ~= "number" then db.nextId = 1 end
     return db
 end
@@ -417,4 +418,10 @@ end
 
 function Data.IsPreviewCamera()
     return DB().settings.noPreviewCamera ~= true
+end
+
+-- Plus haute version entendue et debut de la derniere session. Le module Update
+-- valide ce qu'il y lit : rien ici ne se fie au contenu venu du disque.
+function Data.GetUpdateState()
+    return DB().update
 end
