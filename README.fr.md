@@ -1,6 +1,6 @@
 # 🌳 SkillTreeAutoLoad
 
-**Votre Soul Tree, remise en place d'un seul clic.**
+**Retrouvez votre Skill Tree en un clic.**
 
 ![WoW 3.3.5a](https://img.shields.io/badge/WoW-3.3.5a-00A2FF?style=flat-square)
 ![Serveur Ebonhold](https://img.shields.io/badge/Serveur-Ebonhold-6E44FF?style=flat-square)
@@ -8,9 +8,10 @@
 [![Dernière version](https://img.shields.io/github/v/release/Siphelis/SkillTreeAutoLoad?style=flat-square&color=40C463&label=version)](https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest)
 [![Licence](https://img.shields.io/badge/Licence-PolyForm%20Strict%201.0.0-E5534B?style=flat-square)](LICENSE.md)
 
-Chaque run vous rend plus fort — encore faut-il remonter l'arbre. SkillTreeAutoLoad sauvegarde
-votre Soul Tree telle qu'elle est, et dès que vous avez les Soul Ashes, un clic replace chaque
-nœud là où vous l'aviez laissé. Le temps passe à jouer, pas à recliquer.
+Chaque run vous rend plus puissant — mais il faut toujours reconstruire l'arbre.
+SkillTreeAutoLoad mémorise votre Skill Tree tel quel. Dès que vous avez suffisamment de
+Soul Ashes, un clic suffit pour replacer chaque nœud au bon endroit. Passez votre temps à
+jouer, pas à tout recliquer.
 
 [English](README.md) | **Français** | [Deutsch](README.de.md) | [Español](README.es.md)
 
@@ -24,6 +25,7 @@ nœud là où vous l'aviez laissé. Le temps passe à jouer, pas à recliquer.
 - [💾 Installation](#-installation)
 - [🚀 Prise en main](#-prise-en-main)
 - [🧭 Le panneau](#-le-panneau)
+- [👁 Prévisualiser une sauvegarde](#-prévisualiser-une-sauvegarde)
 - [🔄 Activer une sauvegarde](#-activer-une-sauvegarde)
 - [📂 Vos sauvegardes](#-vos-sauvegardes)
 - [💡 Bon à savoir](#-bon-à-savoir)
@@ -36,35 +38,39 @@ nœud là où vous l'aviez laissé. Le temps passe à jouer, pas à recliquer.
 
 ## 🔥 Pourquoi cet addon
 
-Remonter la Soul Tree à la main, c'est retrouver et cliquer des centaines de nœuds les uns
-après les autres, sans se tromper de rang. C'est le seul moment du jeu où il ne se passe rien.
+Reconstruire le Skill Tree à la main, c'est retrouver des centaines de nœuds et les sélectionner
+un à un, sans se tromper de rang. Une tâche répétitive qui vous éloigne inutilement du jeu.
 
-SkillTreeAutoLoad prend une photo de l'arbre quand il vous convient, et remet cet état exact
-en place quand vous le demandez — nœuds et rangs compris.
+SkillTreeAutoLoad enregistre l'arbre lorsqu'il vous convient, puis restaure cette configuration
+à la demande — nœuds et rangs compris.
 
 ## ✨ Fonctionnalités
 
 | | |
 |---|---|
-| 💾 | **Photographiez l'arbre tel quel** — autant de sauvegardes que vous voulez, chacune nommée |
-| 🖱 | **Un clic pour en retrouver une** — chaque nœud est resélectionné pour vous, au bon rang |
-| 📁 | **Des groupes** pour ranger vos sauvegardes, avec renommage, déplacement et suppression |
-| 💰 | **Coût en Soul Ashes en direct**, mis à jour au fil de vos gains, avec le manque exact au survol |
-| 👥 | **Partagées par tout le compte** — tous vos personnages voient la même liste |
-| 🌍 | **Quatre langues**, selon votre client de jeu |
+| 💾 | **Enregistrez l'arbre tel quel** — créez autant de sauvegardes nommées que vous le souhaitez |
+| 🖱 | **Restaurez une sauvegarde en un clic** — chaque nœud est sélectionné au bon rang |
+| ⚡ | **Choisissez un mode complet ou progressif pour chaque sauvegarde** — attendez le coût total ou dépensez ce que vous pouvez immédiatement |
+| 👁 | **Prévisualisez une sauvegarde directement sur l'arbre** — les nœuds manquants sont surlignés et cadrés au survol |
+| 📊 | **Suivez votre progression d'un coup d'œil** — chaque ligne se remplit selon les Soul Ashes déjà investies |
+| 📁 | **Classez vos sauvegardes par groupes** — renommez-les, déplacez-les ou supprimez-les facilement |
+| 💰 | **Suivez le coût en Soul Ashes en temps réel** — le montant manquant apparaît au survol |
+| 🪟 | **Utilisez un panneau compact et repliable** — placez-le dans le Skill Tree ou à côté de la fenêtre |
+| 👥 | **Retrouvez vos sauvegardes sur tout le compte** — tous vos personnages partagent la même liste |
+| 🌍 | **Profitez de quatre langues** — l'addon suit automatiquement celle de votre client |
 
 ## 📋 Prérequis
 
 | | |
 |---|---|
 | **Jeu** | World of Warcraft 3.3.5a sur le serveur **Ebonhold** |
-| **Dépendance** | Aucune |
+| **Intégration** | ProjectEbonhold, inclus avec le client Ebonhold ; aucun addon supplémentaire requis |
 
 ## 💾 Installation
 
 1. Téléchargez la dernière archive depuis la [page des Releases](https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest).
 2. Extrayez le dossier `SkillTreeAutoLoad` dans `Interface/AddOns/` de votre client Ebonhold.
-3. Relancez le jeu, puis ouvrez la Soul Tree : le panneau apparaît à côté.
+3. Relancez le jeu, puis ouvrez le Skill Tree : le panneau apparaît à côté.
 
 > [!IMPORTANT]
 > Après l'installation, relancez complètement le jeu. Un simple `/reload` ne suffit pas, et vos
@@ -72,73 +78,119 @@ en place quand vous le demandez — nœuds et rangs compris.
 
 ## 🚀 Prise en main
 
-1. Ouvrez la Soul Tree et sélectionnez les nœuds voulus, comme d'habitude.
-2. Cliquez sur **`...`** en haut à droite du panneau → **Nouvelle sauvegarde**, puis nommez-la.
-3. Plus tard, quand l'arbre est à refaire et que vous avez les Soul Ashes, cliquez sur
-   **Activer** sur cette ligne : il est reconstitué tel que vous l'aviez laissé.
-4. Appuyez sur **Apply Changes** de ProjectEbonhold pour l'envoyer au serveur.
+1. Ouvrez le Skill Tree et sélectionnez les nœuds voulus, comme d'habitude.
+2. Cliquez sur **`...`** en haut à droite du panneau, choisissez **Nouvelle sauvegarde**, puis
+   donnez-lui un nom.
+3. Lorsque vous devrez reconstruire l'arbre, cliquez sur **Activer** en face de la sauvegarde :
+   les nœuds seront replacés comme vous les aviez laissés.
+4. Cliquez sur **Apply Changes** dans ProjectEbonhold pour envoyer les changements au serveur.
 
 > [!NOTE]
-> Ouvrez la Soul Tree une fois par session avant d'activer une sauvegarde : l'addon a besoin de
-> la voir s'ouvrir pour savoir où vous en êtes.
+> Ouvrez le Skill Tree au moins une fois par session avant d'activer une sauvegarde. L'addon doit
+> d'abord lire son état actuel.
 
 ## 🧭 Le panneau
 
-Le panneau s'affiche et se masque en même temps que la fenêtre Soul Tree.
+Le panneau s'affiche et se masque avec la fenêtre du Skill Tree.
 
 | Contrôle | Effet |
 |---|---|
-| **`<>`** (en haut à gauche) | Bascule le panneau de l'autre côté de la fenêtre. Mémorisé. |
-| **`...`** (en haut à droite) | Menu du panneau : **Nouvelle sauvegarde** (capture l'arbre tel quel), **Nouveau groupe** |
-| **En-tête de groupe** (clic droit) | Renommer ou supprimer le groupe. Ses sauvegardes retombent dans *Sans catégorie* |
-| **Activer** (sur une ligne) | Remet la sauvegarde dans l'arbre affiché |
-| **`...`** (sur une ligne) | **Renommer** · **Déplacer vers un groupe** · **Mettre à jour (état actuel)** · **Supprimer** |
+| **`<>`** (en haut à gauche) | Déplace le panneau de l'autre côté de la fenêtre. Sa position est mémorisée. |
+| **`-` / `+`** (en haut à gauche) | Replie le panneau sous forme d'onglet ou l'ouvre de nouveau. |
+| **`...`** (en haut à droite) | Crée une sauvegarde ou un groupe et règle le mode compact et le cadrage automatique. |
+| **En-tête de groupe** (clic droit) | Permet de renommer ou de supprimer le groupe. Ses sauvegardes retournent dans *Sans catégorie*. |
+| **Activer** (sur une ligne) | Replace la sauvegarde dans l'arbre affiché. |
+| **Progressif · OUI/NON** (sur une ligne) | Choisit le mode d'activation de cette sauvegarde. Le réglage est mémorisé. |
+| **`...`** (sur une ligne) | Permet de renommer, déplacer, mettre à jour ou supprimer la sauvegarde. |
+| **Ligne d'une sauvegarde** (survol) | Affiche sa progression et son coût, surligne les nœuds manquants et prévisualise leur position. |
 
-Chaque ligne dit où vous en êtes :
+Par défaut, le panneau se place à côté du Skill Tree. Le **mode compact** le superpose au bord
+intérieur de l'arbre et recentre la zone visible autour de lui. Le panneau peut être replié
+dans les deux modes ; son côté, son état et ses options d'affichage sont mémorisés.
 
-- 🟢 **Actif** — la sauvegarde est déjà entièrement sélectionnée, rien à faire.
-- 🟡 **`N nœud(s) — X Soul Ashes`** — ce que sa remise en place ajouterait, et ce qu'elle coûterait.
-- Le bouton **Activer** reste grisé tant que vous ne pouvez pas payer. Survolez la ligne pour
-  connaître le manque exact.
+Chaque ligne indique l'état de la sauvegarde :
 
-La ligne de coût se met à jour toute seule au fil de vos Soul Ashes : vous voyez une
-sauvegarde devenir accessible pendant que vous jouez.
+- 🟢 **Active** — tous les nœuds de la sauvegarde sont déjà sélectionnés.
+- 🟡 En **mode complet**, **`Nœuds : N — Coût : X Soul Ashes`** indique tout ce qu'il reste à
+  obtenir.
+- 🟡 En **mode progressif**, la ligne indique ce que le prochain clic peut activer ou le nombre
+  de Soul Ashes manquant pour atteindre le prochain nœud disponible.
+- Le remplissage de la ligne représente la progression globale selon les Soul Ashes déjà
+  investies, et non simplement le nombre de nœuds terminés.
+
+Le coût est actualisé automatiquement lorsque votre solde de Soul Ashes évolue. Vous voyez
+ainsi immédiatement lorsqu'une sauvegarde devient accessible.
+
+## 👁 Prévisualiser une sauvegarde
+
+Survolez une sauvegarde pour afficher ses nœuds manquants directement sur le Skill Tree. En
+mode complet, ils apparaissent tous en ambre. En mode progressif, les nœuds que le prochain clic
+peut activer apparaissent en vert ; ceux qui devront attendre restent en ambre.
+
+L'addon déplace et ajuste progressivement la vue pour cadrer la partie utile de l'arbre, puis
+restaure votre vue lorsque vous quittez le panneau. Des flèches indiquent combien de nœuds de
+la sauvegarde se trouvent encore hors de l'écran. Vous pouvez désactiver le mouvement avec
+**Cadrer l'arbre au survol** dans le menu du panneau ; le surlignage reste actif.
 
 ## 🔄 Activer une sauvegarde
 
-Un clic sur **Activer** et l'arbre se remplit : chaque nœud de la sauvegarde est resélectionné,
-au bon rang. Le chat vous annonce ce qui a été posé et ce que ça a coûté. Il ne reste qu'à
-appuyer sur **Apply Changes**.
+Chaque sauvegarde possède son propre mode d'activation, sélectionné avec le réglage
+**Progressif · OUI/NON**.
 
-- ✅ **Rien de ce que vous aviez n'est retiré.** Une activation ne fait qu'ajouter : vos nœuds
-  déjà acquis restent en place, quoi qu'il arrive.
-- 💰 **Le coût est annoncé d'avance** et le bouton reste grisé tant que vous ne pouvez pas
-  payer — pas de mauvaise surprise.
-- 🔁 Votre solde de Soul Ashes se corrige tout seul dans la foulée, sans recharger l'interface.
+### Mode complet
+
+Il s'agit du mode par défaut. Le bouton **Activer** reste indisponible tant que vous ne pouvez
+pas payer tous les nœuds et rangs manquants. Un clic restaure alors la configuration entière.
+
+### Mode progressif
+
+Le mode progressif permet d'avancer vers une sauvegarde coûteuse sur plusieurs runs. Chaque
+clic dépense autant que votre solde le permet, en choisissant toujours le rang accessible le
+moins cher et en respectant les prérequis de l'arbre. Si rien ne peut encore être activé, la
+ligne indique le montant nécessaire pour atteindre le prochain nœud disponible.
+
+Après une activation, quel que soit le mode choisi, un message dans le chat récapitule les
+nœuds ajoutés et les Soul Ashes dépensées. Cliquez ensuite sur **Apply Changes** dans
+ProjectEbonhold pour confirmer le résultat.
+
+- ✅ **Aucun nœud déjà sélectionné n'est retiré.** L'activation ajoute uniquement les nœuds
+  manquants.
+- 💰 **Le coût est indiqué à l'avance.** En mode complet, le bouton reste grisé tant que votre
+  solde est insuffisant ; en mode progressif, il devient disponible dès qu'au moins un rang
+  peut être payé.
+- 🔁 **Votre solde de Soul Ashes est mis à jour immédiatement**, sans rechargement de
+  l'interface.
 
 ## 📂 Vos sauvegardes
 
-Elles appartiennent au **compte** : tous vos personnages voient la même liste, et ce que vous
-enregistrez sur l'un se retrouve chez les autres.
+Les sauvegardes sont liées à votre **compte** : tous vos personnages partagent la même liste.
 
-Si vous veniez d'une version antérieure à la 1.5, vos anciennes sauvegardes étaient propres à
-chaque personnage. Elles sont reprises automatiquement à sa première connexion, sans que rien
-ne soit jamais écrasé : une sauvegarde déjà présente à l'identique est ignorée, et un homonyme
-au contenu différent arrive sous `Nom (Personnage)`.
+Si vous utilisiez une version antérieure à la 1.5, vos anciennes sauvegardes étaient propres à
+chaque personnage. Elles sont transférées automatiquement vers le compte lors de la première
+connexion du personnage concerné. Rien n'est écrasé : une sauvegarde strictement identique est
+ignorée, tandis qu'une sauvegarde portant le même nom mais contenant un autre arbre est ajoutée
+sous la forme `Nom (Personnage)`.
 
 > [!NOTE]
-> Créer, renommer, déplacer ou supprimer une sauvegarde recharge l'interface. C'est voulu :
-> c'est le seul moment où le jeu écrit vos sauvegardes sur le disque, elles sont donc à l'abri
-> d'un plantage.
+> La création, le renommage, le déplacement ou la suppression d'une sauvegarde recharge
+> l'interface. Ce comportement est volontaire : le jeu écrit alors vos sauvegardes sur le
+> disque afin de les protéger en cas de plantage.
 
 ## 💡 Bon à savoir
 
-- **Les nœuds à choix multiple sont ignorés** par les sauvegardes. L'addon vous prévient une
-  fois par session lorsqu'il en rencontre un.
-- **Les nœuds permanents ne craignent rien.** Une sauvegarde ne peut contenir que ce que vous
-  aviez choisi vous-même : activer une sauvegarde ne prend jamais cette décision à votre place.
-- **Rien n'est partagé ni exporté.** Vos sauvegardes restent chez vous ; il n'y a aucun code de
-  build à copier-coller.
+- **Les nœuds à choix multiple ne sont pas enregistrés.** L'addon vous avertit une fois par
+  session lorsqu'il en rencontre un.
+- **Les nœuds infinis restent des choix manuels.** Ils ne sont pas enregistrés, mais leurs
+  rangs actuels et leur coût en Soul Ashes sont pris en compte dans le calcul de votre solde.
+- **Les nœuds permanents ne sont jamais modifiés.** Une sauvegarde contient uniquement les
+  choix que vous avez effectués vous-même.
+- **Les nœuds absents de l'arbre affiché sont signalés.** Ils ne peuvent être ni surlignés, ni
+  cadrés, ni activés tant qu'ils ne sont pas disponibles dans l'arbre actuel.
+- **La mise à jour d'une sauvegarde ne peut pas la réduire silencieusement.** Si l'arbre actuel
+  contient moins de nœuds que la sauvegarde existante, l'addon demande une confirmation avant
+  de la remplacer.
+- **Aucune donnée n'est partagée ni exportée.** Vos sauvegardes restent sur votre ordinateur ;
+  aucun code de build n'est généré.
 
 ## 🧱 Anatomie du code
 
@@ -149,10 +201,13 @@ SkillTreeAutoLoad/
 ├── locales/                enUS · frFR · deDE · esES
 └── modules/
     ├── core.lua            lecture de l'arbre, calcul du coût, application d'une sauvegarde
+    ├── plan.lua            calcul de la progression et planification de l'activation progressive
+    ├── overlay.lua         marqueurs colorés sur les nœuds du Skill Tree
+    ├── view.lua            cadrage de l'aperçu, transitions de la vue et flèches hors écran
     ├── data.lua            sauvegardes, groupes, stockage compte et migration
     ├── bridge.lua          dialogue avec le serveur
     ├── menus.lua           menus déroulants et popups
-    ├── ui.lua              le panneau lui-même
+    ├── ui.lua              disposition du panneau, lignes et commandes d'activation
     └── main.lua            démarrage
 ```
 
@@ -164,13 +219,13 @@ L'addon suit automatiquement la langue de votre client de jeu.
 
 ## 📜 Licence
 
-SkillTreeAutoLoad est gratuit, et le restera. Il est publié sous la
-[PolyForm Strict License 1.0.0](LICENSE.md) : vous pouvez l'utiliser pour tout usage non
-commercial, mais vous ne pouvez **ni le revendre, ni le modifier, ni le redistribuer** — cela
-inclut le republier sur un site d'addons, l'intégrer à un pack, ou faire circuler une copie
-modifiée. Pour l'un de ces usages, demandez d'abord.
+SkillTreeAutoLoad est gratuit et le restera. Il est publié sous la
+[PolyForm Strict License 1.0.0](LICENSE.md) : vous pouvez l'utiliser à des fins non
+commerciales, mais vous ne pouvez **ni le vendre, ni le modifier, ni le redistribuer**. Cela
+inclut sa publication sur un site d'addons, son intégration à un pack ou la diffusion d'une
+version modifiée. Pour tout autre usage, demandez d'abord l'autorisation.
 
 ## 🙏 Crédits
 
-Addon par **Siphelis**.
-Développé face à ProjectEbonhold, l'interface cliente du serveur Ebonhold.
+Addon créé par **Siphelis**.
+Développé pour ProjectEbonhold, l'interface cliente du serveur Ebonhold.
