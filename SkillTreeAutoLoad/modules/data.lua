@@ -30,10 +30,6 @@ local function EnsureShape(db)
     return db
 end
 
--- Un rang venu du disque n'est pas une donnee de confiance : un fichier abime ou
--- edite a la main y met ce qu'il veut, et un rang absurde se paie ailleurs, en
--- boucles de planification qui ne finissent pas. On repare ici, une fois, a la
--- lecture, plutot que de se defendre partout ensuite.
 local MAX_RANK = 32
 
 local function RepairRanks(nodeRanks)
@@ -67,8 +63,6 @@ local function Sanitize(db)
         else
             if not IsTable(save.nodeRanks) then save.nodeRanks = {} end
             fixed = fixed + RepairRanks(save.nodeRanks)
-            -- Absent vaut « complet » : le mode progressif ne s'ecrit que lorsqu'il
-            -- est demande, et une base d'avant cette version reste lisible telle quelle.
             if save.progressive ~= true then save.progressive = nil end
         end
     end
@@ -78,9 +72,17 @@ local function Sanitize(db)
     if db.version ~= SCHEMA_VERSION then Migrate(db) end
 end
 
+local EMPTY = {}
+local index
+
+local function Touch()
+    index = nil
+end
+
 local function NewId(db)
     local id = "id" .. db.nextId
     db.nextId = db.nextId + 1
+    Touch()
     return id
 end
 
@@ -95,17 +97,31 @@ local function SortedGroupIds(db)
     return ids
 end
 
-local function SortedSaveIdsInGroup(db, groupId)
-    local ids = {}
+local function BuildIndex(db)
+    local groups = SortedGroupIds(db)
+    local byGroup, ungrouped = {}, {}
+    for i = 1, #groups do byGroup[groups[i]] = {} end
+
     for id, save in pairs(db.saves) do
-        if save.groupId == groupId then ids[#ids + 1] = id end
+        local bucket = (save.groupId == nil) and ungrouped or byGroup[save.groupId]
+        if bucket then bucket[#bucket + 1] = id end
     end
-    table.sort(ids, function(a, b)
-        local nameA, nameB = db.saves[a].name or "", db.saves[b].name or ""
+
+    local saves = db.saves
+    local function byName(a, b)
+        local nameA, nameB = saves[a].name or "", saves[b].name or ""
         if nameA == nameB then return a < b end
         return nameA < nameB
-    end)
-    return ids
+    end
+    for _, ids in pairs(byGroup) do table.sort(ids, byName) end
+    table.sort(ungrouped, byName)
+
+    index = { groups = groups, byGroup = byGroup, ungrouped = ungrouped }
+    return index
+end
+
+local function Index(db)
+    return index or BuildIndex(db)
 end
 
 local function CreateGroupIn(db, name)
@@ -119,19 +135,6 @@ local function CreateGroupIn(db, name)
     db.groups[id] = { name = name, order = maxOrder + 1 }
     return id
 end
-
--- Migration compte : les saves vivaient par personnage, elles vivent desormais sur
--- le compte. Le client ne peut lire que les SavedVariables du personnage connecte,
--- donc la reprise se fait a la premiere connexion de chacun, sans jamais rien
--- ecraser : un homonyme au contenu different est importe sous un nom suffixe.
---
--- Le marqueur « deja repris » vit dans la base COMPTE, pas dans celle du personnage.
--- L'inverse a coute les saves une premiere fois : la base compte n'etait pas encore
--- declaree dans le .toc, donc jamais ecrite, tandis que le marqueur, lui, etait
--- sauvegarde — le garde survivait a ce qu'il gardait et la reprise ne rejouait plus.
--- Marqueur et donnees dans le meme fichier : ils disparaissent ensemble ou pas du tout.
---
--- L'ancienne base n'est jamais modifiee, seulement lue. Elle reste le filet.
 
 local function CopyRanks(source)
     local copy = {}
@@ -173,9 +176,6 @@ local function UniqueSaveName(db, groupId, baseName, charName)
     return candidate
 end
 
--- Lectures filtrees de l'ancienne base : rien n'y est corrige ni supprime, les
--- entrees inexploitables sont seulement ignorees. Une liste plate de toutes les
--- saves valides, donc aucune ne peut echapper au balayage.
 local function LegacyGroupIds(legacy)
     local groups = IsTable(legacy.groups) and legacy.groups or {}
     local ids = {}
@@ -215,8 +215,6 @@ local function MigrateCharacterDB(db)
     local legacy = SkillTreeAutoLoadDB
     if not IsTable(legacy) then return end
 
-    -- Le nom du personnage sert de marqueur et nomme les doublons : sans lui on
-    -- attend l'appel suivant, Data.Init() etant rejoue a PLAYER_LOGIN.
     local key, charName = CharacterKey()
     if not key or db.imported[key] then return end
 
@@ -247,8 +245,6 @@ local function MigrateCharacterDB(db)
         end
     end
 
-    -- Le cote du panneau devient un reglage de compte : on adopte celui du premier
-    -- personnage repris, les suivants ne le rediscutent plus.
     if not db.settings.adoptedFromCharacter then
         if IsTable(legacy.settings) and legacy.settings.panelSide == "LEFT" then
             db.settings.panelSide = "LEFT"
@@ -272,21 +268,16 @@ function Data.Init()
 
     if db.settings.panelSide ~= "LEFT" then db.settings.panelSide = "RIGHT" end
 
+    Touch()
     return db
 end
 
 local function DB()
     if not IsTable(SkillTreeAutoLoadAccountDB) then return Data.Init() end
-    -- EnsureShape est idempotent : le payer a chaque acces coute cinq tests, et
-    -- ferme toute une classe de « attempt to index a nil value » le jour ou une
-    -- base tronquee arrive du disque avant le premier Data.Init().
     return EnsureShape(SkillTreeAutoLoadAccountDB)
 end
 
 function Data.Persist()
-    -- Les SavedVariables ne partent sur le disque qu'a la deconnexion ou au
-    -- rechargement : on provoque le second. Le joueur doit savoir pourquoi son
-    -- ecran se vide.
     NS.Log(L.MSG_RELOADING)
     ReloadUI()
 end
@@ -299,6 +290,7 @@ function Data.RenameGroup(groupId, newName)
     local group = DB().groups[groupId]
     if not group then return false end
     group.name = newName
+    Touch()
     return true
 end
 
@@ -310,6 +302,7 @@ function Data.DeleteGroup(groupId)
     for _, save in pairs(db.saves) do
         if save.groupId == groupId then save.groupId = nil end
     end
+    Touch()
     return true
 end
 
@@ -318,7 +311,7 @@ function Data.GetGroup(groupId)
 end
 
 function Data.GetSortedGroupIds()
-    return SortedGroupIds(DB())
+    return Index(DB()).groups
 end
 
 function Data.CreateSave(name, groupId, nodeRanks)
@@ -343,13 +336,10 @@ function Data.RenameSave(saveId, newName)
     local save = DB().saves[saveId]
     if not save then return false end
     save.name = newName
+    Touch()
     return true
 end
 
--- Le mode d'activation n'appelle pas Persist : il se bascule en cours de partie,
--- souvent, et un ReloadUI a chaque clic rendrait la bascule inutilisable. La valeur
--- part sur le disque a la prochaine deconnexion ou au prochain rechargement, comme
--- n'importe quel reglage. Au pire on reperd un basculement, jamais une save.
 function Data.SetSaveProgressive(saveId, enabled)
     local save = DB().saves[saveId]
     if not save then return false end
@@ -366,6 +356,7 @@ function Data.MoveSaveToGroup(saveId, groupId)
     local save = DB().saves[saveId]
     if not save then return false end
     save.groupId = groupId
+    Touch()
     return true
 end
 
@@ -373,6 +364,7 @@ function Data.DeleteSave(saveId)
     local db = DB()
     if not db.saves[saveId] then return false end
     db.saves[saveId] = nil
+    Touch()
     return true
 end
 
@@ -381,7 +373,9 @@ function Data.GetSave(saveId)
 end
 
 function Data.GetSortedSaveIdsInGroup(groupId)
-    return SortedSaveIdsInGroup(DB(), groupId)
+    local idx = Index(DB())
+    if groupId == nil then return idx.ungrouped end
+    return idx.byGroup[groupId] or EMPTY
 end
 
 function Data.SetPanelSide(side)
@@ -392,9 +386,6 @@ function Data.GetPanelSide()
     return DB().settings.panelSide
 end
 
--- Reglages d'affichage : pas de Persist, comme le mode progressif. Ils se basculent
--- en jeu et partent sur le disque a la prochaine deconnexion ou au prochain
--- rechargement. Absent vaut desactive.
 function Data.SetCompact(enabled)
     DB().settings.compact = enabled and true or nil
 end
@@ -411,7 +402,6 @@ function Data.IsPanelCollapsed()
     return DB().settings.collapsed == true
 end
 
--- Actif par defaut : c'est la desactivation qui s'ecrit.
 function Data.SetPreviewCamera(enabled)
     DB().settings.noPreviewCamera = (not enabled) and true or nil
 end
@@ -420,8 +410,6 @@ function Data.IsPreviewCamera()
     return DB().settings.noPreviewCamera ~= true
 end
 
--- Plus haute version entendue et debut de la derniere session. Le module Update
--- valide ce qu'il y lit : rien ici ne se fie au contenu venu du disque.
 function Data.GetUpdateState()
     return DB().update
 end

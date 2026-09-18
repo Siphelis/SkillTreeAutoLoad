@@ -5,12 +5,8 @@ NS.Plan = Plan
 
 local parentsOf, childrenOf, maxRankOf, costsOf, isStartNode
 
--- `x or {}` dans une boucle alloue une table par tour des que x est nil. Une seule
--- table vide, jamais ecrite, dit la meme chose sans rien couter.
 local EMPTY = {}
 
--- Le graphe de l'arbre ne bouge pas d'une session a l'autre : on le construit une
--- seule fois, a la premiere demande, et on le garde.
 local function BuildGraph()
     if parentsOf then return true end
 
@@ -20,16 +16,11 @@ local function BuildGraph()
     parentsOf, childrenOf, maxRankOf, costsOf, isStartNode = {}, {}, {}, {}, {}
 
     for _, node in ipairs(tree.nodes) do
-        -- Meme definition que ProjectEbonhold : le rang maximum est le nombre de
-        -- sorts du noeud, pas la longueur de sa table de couts.
         maxRankOf[node.id] = #(node.spells or {})
         costsOf[node.id] = node.soulPointsCosts or {}
         if node.isStart then isStartNode[node.id] = true end
     end
 
-    -- Un lien { a, b } se lit « a est parent de b ». On garde les deux sens : les
-    -- parents disent si un noeud est ouvert, les enfants disent qui vient de
-    -- s'ouvrir quand un noeud atteint enfin son rang maximum.
     for _, link in ipairs(tree.links) do
         local parentId, childId = link[1], link[2]
 
@@ -62,8 +53,6 @@ local function RankCost(nodeId, fromRank, toRank)
     return total
 end
 
--- Ce que la save ajouterait a l'arbre tel qu'il est. Ne depend pas du graphe : c'est
--- une simple difference, et l'overlay s'en sert pour dessiner la save en entier.
 function Plan.ComputeMissing(targets, snapshot)
     local missing, count = {}, 0
     snapshot = snapshot or EMPTY
@@ -88,9 +77,6 @@ local function PushLinked(linked, set, seen, stack)
     end
 end
 
--- La plus grande grappe de noeuds de `set` relies entre eux par l'arbre, parents ou
--- enfants. L'apercu s'y rabat quand une save ne tient pas dans la vue : c'est la
--- branche la plus fournie qu'il montre. Sans graphe, on rend l'ensemble tel quel.
 function Plan.LargestGroup(set)
     if not BuildGraph() then return set end
 
@@ -116,19 +102,12 @@ function Plan.LargestGroup(set)
     return best
 end
 
--- Avancement d'une save, pondere par les cendres et non par le nombre de noeuds :
--- les premiers coutent 50, les derniers 52 500. Compter les noeuds annoncerait une
--- save presque finie alors qu'il reste l'essentiel de la facture a payer.
 function Plan.ComputeProgress(targets, snapshot)
     if not BuildGraph() then return nil end
 
     snapshot = snapshot or EMPTY
     local ownedCost, totalCost, ownedNodes, totalNodes = 0, 0, 0, 0
 
-    -- Les couts du noeud sont parcourus une fois pour les deux totaux, au lieu de
-    -- deux appels a RankCost qui relisaient la meme table. Sur une save complete
-    -- cette boucle tourne 643 fois a chaque redessin de la liste : ce qu'on y pose
-    -- s'y paie autant de fois.
     for nodeId, targetRank in pairs(targets or EMPTY) do
         if maxRankOf[nodeId] then
             local costs = costsOf[nodeId]
@@ -149,9 +128,6 @@ function Plan.ComputeProgress(targets, snapshot)
     return ownedCost, totalCost, ownedNodes, totalNodes
 end
 
--- Tas binaire sur le couple (cout du prochain rang, id du noeud) : exactement
--- l'ordre que departageait la comparaison du choix glouton, le moins cher d'abord
--- et le plus petit id a cout egal.
 local function HeapPush(costs, ids, size, cost, id)
     size = size + 1
 
@@ -201,15 +177,12 @@ local function HeapPop(costs, ids, size)
     return topCost, topId, size
 end
 
--- Regle recopiee de `hasPrerequisites` : un noeud de depart est toujours ouvert, et
--- tout autre noeud exige TOUS ses parents au rang maximum. Un noeud sans parent qui
--- n'est pas un depart reste donc ferme, exactement comme cote serveur.
---
--- On ne la rejoue pas a chaque tour : on compte une fois les parents qui manquent, et
--- un parent que le plan ne menera pas jusqu'a son maximum ferme le noeud pour de bon.
--- Ceux qui attendent encore sont ranges dans `waiting`, ou seul l'achat d'un parent
--- viendra les rechercher.
-local function ClassifyNode(nodeId, ranks, goals, waiting)
+local wipe = wipe or function(t) for k in pairs(t) do t[k] = nil end end
+
+local goals, waiting = {}, {}
+local heapCosts, heapIds = {}, {}
+
+local function ClassifyNode(nodeId, snapshot)
     if isStartNode[nodeId] then return true end
 
     local parents = parentsOf[nodeId]
@@ -222,7 +195,7 @@ local function ClassifyNode(nodeId, ranks, goals, waiting)
 
         if parentMax == 0 then return false end
 
-        if (ranks[parentId] or 0) < parentMax then
+        if (snapshot[parentId] or 0) < parentMax then
             if goals[parentId] ~= parentMax then return false end
             unmet = unmet + 1
         end
@@ -234,44 +207,28 @@ local function ClassifyNode(nodeId, ranks, goals, waiting)
     return false
 end
 
--- Achat glouton, rang par rang : a chaque tour on prend le rang ouvert le moins cher,
--- puis on recommence avec ce qui reste. C'est la suite de clics la moins chere, donc
--- la plus previsible — et le joueur la relit sur l'arbre avant de valider, l'overlay
--- la lui montre en vert. On rend aussi le prix du premier rang hors budget, qui est
--- le seul chiffre utile quand plus rien n'est payable.
---
--- Les noeuds ouverts sont tenus dans un tas plutot que rebalayes a chaque tour : un
--- achat n'ouvre que les enfants du noeud qu'il vient de terminer, et le sommet du tas
--- est deja le rang le moins cher. Le temps ne depend donc plus du carre du nombre de
--- noeuds de la save — ce qui se voyait a l'ecran, la liste etant redessinee des que
--- la reserve bouge, c'est-a-dire a chaque clic du joueur dans l'arbre.
 function Plan.ComputeProgressive(targets, snapshot, budget)
     if not BuildGraph() then return nil end
 
-    local ranks = {}
-    for nodeId, rank in pairs(snapshot or EMPTY) do ranks[nodeId] = rank end
-
-    -- La cible est plafonnee au rang maximum du noeud. Une save abimee qui
-    -- demanderait un rang absurde ferait tourner la boucle autant de fois qu'elle
-    -- annonce : le client se figerait, sans rien afficher.
-    local goals = {}
+    snapshot = snapshot or EMPTY
+    wipe(goals)
+    wipe(waiting)
+    wipe(heapCosts)
+    wipe(heapIds)
 
     for nodeId, targetRank in pairs(targets or EMPTY) do
         local maxRank = maxRankOf[nodeId]
         if maxRank then
             local goal = (targetRank > maxRank) and maxRank or targetRank
-            if (ranks[nodeId] or 0) < goal then goals[nodeId] = goal end
+            if (snapshot[nodeId] or 0) < goal then goals[nodeId] = goal end
         end
     end
 
-    -- Deux passes et non une : le classement d'un noeud lit les objectifs de ses
-    -- parents, qui ne sont tous connus qu'a la fin de la premiere.
-    local heapCosts, heapIds, heapSize = {}, {}, 0
-    local waiting = {}
+    local heapSize = 0
 
     for nodeId in pairs(goals) do
-        if ClassifyNode(nodeId, ranks, goals, waiting) then
-            local rank = ranks[nodeId] or 0
+        if ClassifyNode(nodeId, snapshot) then
+            local rank = snapshot[nodeId] or 0
             heapSize = HeapPush(heapCosts, heapIds, heapSize,
                 RankCost(nodeId, rank, rank + 1), nodeId)
         end
@@ -281,22 +238,17 @@ function Plan.ComputeProgressive(targets, snapshot, budget)
     local remaining = budget or 0
     local blockedCost
 
-    -- Chaque tour retire un rang du tas, et n'en remet au plus qu'un par noeud
-    -- ouvert : la boucle ne peut pas survivre a ses donnees.
     while heapSize > 0 do
         local cost, nodeId
         cost, nodeId, heapSize = HeapPop(heapCosts, heapIds, heapSize)
 
-        -- Le sommet est le moins cher de tout ce qui est ouvert : s'il ne passe pas,
-        -- rien ne passe, et c'est deja le chiffre a annoncer au joueur.
         if cost > remaining then
             blockedCost = cost
             break
         end
 
-        local newRank = (ranks[nodeId] or 0) + 1
+        local newRank = (chosen[nodeId] or snapshot[nodeId] or 0) + 1
         if not chosen[nodeId] then chosenCount = chosenCount + 1 end
-        ranks[nodeId] = newRank
         chosen[nodeId] = newRank
         remaining = remaining - cost
         spent = spent + cost
@@ -317,7 +269,7 @@ function Plan.ComputeProgressive(targets, snapshot, budget)
                         waiting[childId] = unmet
                     else
                         waiting[childId] = nil
-                        local rank = ranks[childId] or 0
+                        local rank = chosen[childId] or snapshot[childId] or 0
                         heapSize = HeapPush(heapCosts, heapIds, heapSize,
                             RankCost(childId, rank, rank + 1), childId)
                     end

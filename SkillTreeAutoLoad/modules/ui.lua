@@ -24,28 +24,28 @@ local TOGGLE_WIDTH = 26
 local TOGGLE_HEIGHT = 16
 local TOGGLE_LABEL_WIDTH = 62
 
--- La ligne est ancree par ses deux bords, sa largeur n'existe donc qu'une fois le
--- panneau dispose. La jauge, elle, doit connaitre sa largeur des le premier dessin :
--- on la derive des constantes plutot que de lire une geometrie pas encore calculee.
 local ROW_WIDTH = PANEL_WIDTH - 12 - SCROLL_MARGIN_RIGHT - 4
+
+local TEXT_ON_ACTIVE = Colorize(COLOR.SUCCESS, L.BTN_ON)
+local TEXT_ON_DIM = Colorize(COLOR.DIM, L.BTN_ON)
+local TEXT_OFF_ACTIVE = Colorize(COLOR.HIGHLIGHT, L.BTN_OFF)
+local TEXT_OFF_DIM = Colorize(COLOR.DIM, L.BTN_OFF)
+local TEXT_READ_FAILED = Colorize(COLOR.ERROR, L.ROW_READ_FAILED)
+local TEXT_ACTIVE = Colorize(COLOR.SUCCESS, L.ROW_ACTIVE)
+local NO_NODES = {}
 
 local panel, scroll, scrollChild, emptyText
 local sideBtn, collapseBtn, menuBtn, updateBtn, grain, fade
 local headerPool, rowPool = {}, {}
+local panelShown = false
+local watched, refreshDriver, refreshQueued = false, nil, false
 
--- Definie plus bas, pres de la disposition du panneau : RefreshList l'appelle pour
--- ranger les lignes qu'il vient de creer.
 local ApplyLevels
 
 local layout = { y = 0, headers = 0, rows = 0, snapshot = nil, available = nil }
 
--- Ligne dont l'infobulle est posee : passer d'une ligne a l'un de ses boutons ne doit
--- rien reconstruire. Remise a nil des que la liste change.
 local tooltipRow
 
--- Cout et avancement d'une save ne dependent que de l'arbre. Tant que sa lecture n'a pas
--- change, on les relit ici plutot que de reparcourir ses 800 noeuds — pour chaque ligne,
--- a chaque clic du joueur dans l'arbre, qui bouge le solde et redessine la liste.
 local savePlans = {}
 
 local function GetSavePlan(saveId, save, snapshot)
@@ -58,10 +58,24 @@ local function GetSavePlan(saveId, save, snapshot)
     plan.ownedCost, plan.saveCost, plan.ownedNodes, plan.totalNodes =
         NS.Plan.ComputeProgress(save.nodeRanks, snapshot)
 
-    -- Un arbre illisible ne se met pas en cache : la prochaine lecture doit reessayer.
     plan.stamp = plan.totalCost and stamp or nil
+    plan.progStamp = nil
     savePlans[saveId] = plan
     return plan
+end
+
+local function GetProgressivePlan(plan, save, snapshot, available)
+    if plan.stamp and plan.progStamp == plan.stamp and plan.progBudget == available then
+        return plan.chosen, plan.spent, plan.count, plan.blocked
+    end
+
+    local chosen, spent, count, blocked =
+        NS.Plan.ComputeProgressive(save.nodeRanks, snapshot, available)
+    if chosen then
+        plan.chosen, plan.spent, plan.count, plan.blocked = chosen, spent, count, blocked
+        plan.progStamp, plan.progBudget = plan.stamp, available
+    end
+    return chosen, spent, count, blocked
 end
 
 local function ActivateSave(saveId)
@@ -80,8 +94,6 @@ local function ActivateSave(saveId)
         return
     end
 
-    -- Le plan progressif est recalcule au clic, jamais repris de la liste : entre le
-    -- dernier rafraichissement et maintenant, le solde a pu bouger.
     local targets, touched, partial = save.nodeRanks, pendingNodes, false
 
     if save.progressive then
@@ -118,9 +130,6 @@ local function ActivateSave(saveId)
     UI.RefreshList()
 end
 
--- La fenetre qui porte l'arbre : son ancetre juste sous UIParent. Depuis que l'arbre
--- est un onglet de CollectionsJournal, ses bords ne sont plus ceux de la fenetre, et
--- c'est contre la fenetre que le panneau doit se poser.
 local function GetTreeWindow()
     local window, parent = skillTreeFrame, skillTreeFrame:GetParent()
     while parent and parent ~= UIParent do
@@ -131,8 +140,6 @@ end
 
 local TOOLTIP_GAP = 4
 
--- Bords en pixels d'ecran : l'infobulle, le panneau et la fenetre n'ont pas forcement la
--- meme echelle.
 local function ScreenLeft(frame)
     return frame:GetLeft() * frame:GetEffectiveScale()
 end
@@ -141,8 +148,6 @@ local function ScreenRight(frame)
     return frame:GetRight() * frame:GetEffectiveScale()
 end
 
--- Alignee sur le haut de la ligne, l'infobulle se colle au bord `edge` du cote voulu.
--- Les decalages de SetPoint se comptent a l'echelle de l'infobulle.
 local function AnchorTooltip(row, towardRight, edge)
     local scale = GameTooltip:GetEffectiveScale()
     GameTooltip:ClearAllPoints()
@@ -155,10 +160,6 @@ local function AnchorTooltip(row, towardRight, edge)
     end
 end
 
--- Panneau a gauche, l'infobulle n'a nulle part ou aller de cote : dehors, la fenetre
--- colle au bord de l'ecran ; dedans, elle recouvrirait l'arbre. Elle se pose donc sous
--- la ligne, dans la colonne du panneau dont elle a pris la largeur, ou au-dessus quand
--- l'ecran manque de place en bas.
 local function StackTooltip(row)
     local scale = GameTooltip:GetEffectiveScale()
     local rowScale = row:GetEffectiveScale()
@@ -175,16 +176,9 @@ local function StackTooltip(row)
     end
 end
 
--- Panneau a droite, l'infobulle part vers l'exterieur, loin de l'arbre qu'elle
--- recouvrirait. En mode compact, l'exterieur commence au bord de la fenetre, le panneau
--- etant dedans. Elle ne revient cote arbre, contre le bord interieur du panneau, que si
--- l'ecran n'a pas la place de la loger dehors : l'infobulle est bornee a l'ecran, et le
--- client la ramenerait sinon par-dessus le panneau lui-meme.
 local function PlaceRowTooltip(row, stacked)
     local outer = NS.Data.IsCompact() and GetTreeWindow() or panel
     if not (outer:GetLeft() and row:GetLeft() and row:GetBottom() and panel:GetLeft()) then
-        -- Geometrie pas encore calculee : une ancre simple plutot qu'une infobulle sans
-        -- aucun point, que le client n'afficherait nulle part.
         GameTooltip:ClearAllPoints()
         GameTooltip:SetPoint("TOPLEFT", row, "TOPRIGHT", TOOLTIP_GAP, 0)
         return
@@ -216,28 +210,14 @@ local function ShowRowTooltip(self)
     local save = row.saveId and NS.Data.GetSave(row.saveId)
     if not save then return end
 
-    -- Deja pose pour cette ligne : la souris n'a fait que passer sur l'un de ses boutons.
     if tooltipRow == row then return end
     tooltipRow = row
 
     local snapshot = NS.Core.GetTreeSnapshot()
 
-    -- Ce que la save ajouterait ne sert qu'ici, au survol : le calculer pour chaque
-    -- ligne a chaque rafraichissement revenait a preparer une table par save pour
-    -- celle, au plus, que le joueur allait survoler. `affordable` vient de la ligne,
-    -- lui : c'est le plan que son texte annonce, il doit rester celui-la.
-    -- L'apercu decide quand poser les cadres : pendant qu'il deplace la vue, ils
-    -- couteraient un redimensionnement par palier de zoom, des centaines a la fois.
     local missing = snapshot and NS.Plan.ComputeMissing(save.nodeRanks, snapshot)
     NS.View.Preview(row.saveId, missing, row.affordable)
 
-    -- Posee apres Show : c'est Show qui donne sa taille a l'infobulle, et il faut la
-    -- connaitre pour savoir ou elle loge.
-    --
-    -- Empilee sous la ligne (panneau a gauche), elle prend la largeur du panneau et toutes
-    -- ses lignes passent a la ligne : trop large, elle deborderait sur l'arbre. La largeur
-    -- minimale est remise a zero dans tous les autres cas, GameTooltip servant a toute
-    -- l'interface.
     local stacked = NS.Data.GetPanelSide() == "LEFT"
     GameTooltip:SetOwner(row, "ANCHOR_NONE")
     if GameTooltip.SetMinimumWidth then
@@ -267,8 +247,6 @@ local function ShowRowTooltip(self)
                 1, 0.3, 0.3, stacked)
         end
 
-        -- La legende n'a de sens qu'en progressif : c'est le seul cas ou l'arbre
-        -- porte deux couleurs.
         if row.affordable then
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine(L.TOOLTIP_LEGEND_NOW, 0.3, 1, 0.3, stacked)
@@ -283,18 +261,12 @@ local function ShowRowTooltip(self)
     GameTooltip:Show()
     PlaceRowTooltip(row, stacked)
 
-    -- Le client habille GameTooltip d'un fond translucide : pose par-dessus la liste
-    -- des saves, le texte devient illisible. On repose l'opacite apres Show, pas
-    -- avant : c'est Show qui declenche l'habillage qu'il faut recouvrir.
     if GameTooltip.SetBackdropColor then
         GameTooltip:SetBackdropColor(0, 0, 0, 1)
     end
 end
 
 local function HideRowTooltip(self)
-    -- Glisser de la ligne a l'un de ses boutons, ou l'inverse, n'est pas un depart : tout
-    -- defaire puis tout refaire a chaque mouvement dans la ligne coutait, sur une grosse
-    -- save, des milliers d'appels et une transition relancee.
     local row = self and (self.row or self)
     if row and row:IsMouseOver() then return end
 
@@ -305,7 +277,6 @@ local function HideRowTooltip(self)
     NS.View.Release()
 end
 
--- Le mode se bascule en pleine partie : pas de Persist ici, donc pas de ReloadUI.
 local function SetRowProgressive(row, enabled)
     if not row.saveId then return end
     if not NS.Data.SetSaveProgressive(row.saveId, enabled) then return end
@@ -329,7 +300,6 @@ end
 local function OnActivateClick(self)
     ActivateSave(self.row.saveId)
 
-    -- L'arbre vient de changer sous la souris : marques, infobulle et apercu suivent.
     if self:IsMouseOver() then ShowRowTooltip(self) end
 end
 
@@ -352,6 +322,7 @@ local function AcquireHeader(index)
     header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     header.text:SetPoint("LEFT", header, "LEFT", 4, 0)
 
+    header:SetPoint("RIGHT", scrollChild, "RIGHT", 0, 0)
     header:SetScript("OnClick", OnHeaderClick)
 
     headerPool[index] = header
@@ -368,8 +339,6 @@ local function AcquireRow(index)
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints(row)
 
-    -- L'avancement remplit le fond de la ligne plutot que d'occuper une barre a lui :
-    -- il ne coute aucune hauteur, et sur une liste longue il se lit sans etre lu.
     row.fill = row:CreateTexture(nil, "BORDER")
     row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
     row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
@@ -412,14 +381,13 @@ local function AcquireRow(index)
     row.offBtn.row = row
     row.offBtn:SetScript("OnClick", OnProgressiveOffClick)
 
-    -- Largeur figee et ancrage par la droite : le libelle se centre sur la bascule et
-    -- se coupe au lieu de la pousser dans le bouton Activer quand la langue est longue.
     row.progLabel = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     row.progLabel:SetWidth(TOGGLE_LABEL_WIDTH)
     row.progLabel:SetJustifyH("LEFT")
     row.progLabel:SetPoint("RIGHT", row.onBtn, "LEFT", -4, 0)
     row.progLabel:SetText(L.ROW_PROGRESSIVE)
 
+    row:SetPoint("RIGHT", scrollChild, "RIGHT", -2, 0)
     row:SetScript("OnEnter", ShowRowTooltip)
     row:SetScript("OnLeave", HideRowTooltip)
     row.activateBtn:SetScript("OnEnter", ShowRowTooltip)
@@ -436,19 +404,56 @@ local function AcquireRow(index)
 end
 
 local function SetRowFill(row, fraction)
-    if not fraction or fraction <= 0 then
-        row.fill:Hide()
-        return
+    local width
+    if fraction and fraction > 0 then
+        if fraction > 1 then fraction = 1 end
+        width = ROW_WIDTH * fraction
+        if width < 1 then width = 1 end
     end
 
-    if fraction > 1 then fraction = 1 end
-    row.fill:SetWidth(math.max(1, ROW_WIDTH * fraction))
-    row.fill:Show()
+    if row.fillLast == width then return end
+    row.fillLast = width
+
+    if width then
+        row.fill:SetWidth(width)
+        row.fill:Show()
+    else
+        row.fill:Hide()
+    end
 end
 
 local function SetRowMode(row, progressive)
-    row.onBtn:SetText(Colorize(progressive and COLOR.SUCCESS or COLOR.DIM, L.BTN_ON))
-    row.offBtn:SetText(Colorize(progressive and COLOR.DIM or COLOR.HIGHLIGHT, L.BTN_OFF))
+    if row.modeLast == progressive then return end
+    row.modeLast = progressive
+    row.onBtn:SetText(progressive and TEXT_ON_ACTIVE or TEXT_ON_DIM)
+    row.offBtn:SetText(progressive and TEXT_OFF_DIM or TEXT_OFF_ACTIVE)
+end
+
+local function SetRowCost(row, text)
+    if row.costLast == text then return end
+    row.costLast = text
+    row.costText:SetText(text)
+end
+
+local function PlaceFrame(frame, x, y)
+    if frame.yLast ~= y then
+        frame.yLast = y
+        frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", x, y)
+    end
+    if not frame.shown then
+        frame.shown = true
+        frame:Show()
+    end
+end
+
+local function HideFrom(pool, first)
+    for i = first, #pool do
+        local frame = pool[i]
+        if frame.shown then
+            frame.shown = false
+            frame:Hide()
+        end
+    end
 end
 
 local function LayoutSaveRow(saveId)
@@ -458,20 +463,22 @@ local function LayoutSaveRow(saveId)
     layout.rows = layout.rows + 1
     local row = AcquireRow(layout.rows)
     row.saveId = saveId
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 2, layout.y)
-    row:SetPoint("RIGHT", scrollChild, "RIGHT", -2, 0)
-    row:Show()
+    PlaceFrame(row, 2, layout.y)
 
-    -- Sur le verre du mode compact, les icones de l'arbre passent sous le texte : le
-    -- fond de ligne se fonce pour qu'il reste lisible.
-    if NS.Data.IsCompact() then
-        row.bg:SetTexture(0, 0, 0, 0.35)
-    else
-        row.bg:SetTexture(1, 1, 1, 0.04)
+    local dark = NS.Data.IsCompact()
+    if row.bgLast ~= dark then
+        row.bgLast = dark
+        if dark then
+            row.bg:SetTexture(0, 0, 0, 0.35)
+        else
+            row.bg:SetTexture(1, 1, 1, 0.04)
+        end
     end
 
-    row.nameText:SetText(save.name)
+    if row.nameLast ~= save.name then
+        row.nameLast = save.name
+        row.nameText:SetText(save.name)
+    end
 
     local progressive = save.progressive == true
     SetRowMode(row, progressive)
@@ -479,84 +486,79 @@ local function LayoutSaveRow(saveId)
     local plan = layout.snapshot and GetSavePlan(saveId, save, layout.snapshot)
     local totalCost, pendingNodes = plan and plan.totalCost, plan and plan.pendingNodes
 
-    -- Le plan que l'overlay peindra en vert au survol. Reste nil en mode complet :
-    -- rien a departager, une seule couleur sur l'arbre.
     row.affordable = nil
 
     local canActivate = false
 
     if not totalCost then
-        row.costText:SetText(Colorize(COLOR.ERROR, L.ROW_READ_FAILED))
+        SetRowCost(row, TEXT_READ_FAILED)
         SetRowFill(row, 0)
     elseif pendingNodes == 0 then
-        row.costText:SetText(Colorize(COLOR.SUCCESS, L.ROW_ACTIVE))
+        SetRowCost(row, TEXT_ACTIVE)
         SetRowFill(row, 1)
     else
         local ownedCost, saveCost = plan.ownedCost, plan.saveCost
         SetRowFill(row, (ownedCost and saveCost and saveCost > 0) and (ownedCost / saveCost) or 0)
 
         if progressive then
+            local available = layout.available or 0
             local chosen, spent, count, blocked =
-                NS.Plan.ComputeProgressive(save.nodeRanks, layout.snapshot, layout.available or 0)
+                GetProgressivePlan(plan, save, layout.snapshot, available)
 
             if chosen and count > 0 then
                 row.affordable = chosen
-                row.costText:SetText(string.format(L.ROW_NEXT_STEP, count, FormatCost(spent)))
+                SetRowCost(row, string.format(L.ROW_NEXT_STEP, count, FormatCost(spent)))
                 canActivate = true
             else
-                row.affordable = chosen or {}
-                -- Le seul chiffre utile quand rien n'est payable : le prix du prochain
-                -- rang ouvert, pas le total de la save.
-                local short = blocked and (blocked - (layout.available or 0))
+                row.affordable = chosen or NO_NODES
+                local short = blocked and (blocked - available)
                 if short and short > 0 then
-                    row.costText:SetText(Colorize(COLOR.WARN,
+                    SetRowCost(row, Colorize(COLOR.WARN,
                         string.format(L.ROW_BLOCKED, FormatCost(short))))
                 else
-                    row.costText:SetText(string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
+                    SetRowCost(row, string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
                 end
             end
         else
-            row.costText:SetText(string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
+            SetRowCost(row, string.format(L.ROW_COST, pendingNodes, FormatCost(totalCost)))
             canActivate = (layout.available ~= nil) and (layout.available >= totalCost)
         end
     end
 
-    if canActivate then
-        row.activateBtn:Enable()
-    else
-        row.activateBtn:Disable()
+    if row.enabledLast ~= canActivate then
+        row.enabledLast = canActivate
+        if canActivate then
+            row.activateBtn:Enable()
+        else
+            row.activateBtn:Disable()
+        end
     end
 
     layout.y = layout.y - (ROW_HEIGHT + ROW_SPACING)
 end
 
--- La liste des saves du groupe est passee plutot que redemandee : l'appelant doit
--- deja la connaitre pour savoir s'il y a un groupe a dessiner, et chaque demande
--- rebalaye puis retrie toutes les saves de la base.
 local function LayoutGroup(groupId, groupName, saveIds)
     layout.headers = layout.headers + 1
     local header = AcquireHeader(layout.headers)
     header.groupId = groupId
-    header.text:SetText(groupName)
-    header:ClearAllPoints()
-    header:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, layout.y)
-    header:SetPoint("RIGHT", scrollChild, "RIGHT", 0, 0)
-    header:Show()
+    if header.nameLast ~= groupName then
+        header.nameLast = groupName
+        header.text:SetText(groupName)
+    end
+    PlaceFrame(header, 0, layout.y)
 
     layout.y = layout.y - (GROUP_HEADER_HEIGHT + ROW_SPACING)
 
-    for _, saveId in ipairs(saveIds) do
-        LayoutSaveRow(saveId)
+    for i = 1, #saveIds do
+        LayoutSaveRow(saveIds[i])
     end
 end
 
 function UI.RefreshList()
     if not scrollChild then return end
 
-    -- Le contenu des lignes va changer : l'infobulle deja posee ne vaut plus.
     tooltipRow = nil
 
-    -- Replie, la liste n'est pas a l'ecran : on la redessinera au deploiement.
     if NS.Data.IsPanelCollapsed() then return end
 
     layout.y = -2
@@ -565,7 +567,9 @@ function UI.RefreshList()
     layout.snapshot = NS.Core.GetTreeSnapshot()
     layout.available = NS.Core.GetAvailableSoulAshes()
 
-    for _, groupId in ipairs(NS.Data.GetSortedGroupIds()) do
+    local groupIds = NS.Data.GetSortedGroupIds()
+    for i = 1, #groupIds do
+        local groupId = groupIds[i]
         LayoutGroup(groupId, NS.Data.GetGroup(groupId).name,
             NS.Data.GetSortedSaveIdsInGroup(groupId))
     end
@@ -575,22 +579,25 @@ function UI.RefreshList()
         LayoutGroup(nil, L.UNGROUPED, ungrouped)
     end
 
-    for i = layout.headers + 1, #headerPool do headerPool[i]:Hide() end
-    for i = layout.rows + 1, #rowPool do rowPool[i]:Hide() end
+    HideFrom(headerPool, layout.headers + 1)
+    HideFrom(rowPool, layout.rows + 1)
 
-    scrollChild:SetHeight(math.max(-layout.y, 1))
+    local height = -layout.y
+    if height < 1 then height = 1 end
+    if layout.heightLast ~= height then
+        layout.heightLast = height
+        scrollChild:SetHeight(height)
+    end
 
-    if layout.headers == 0 then emptyText:Show() else emptyText:Hide() end
+    local empty = layout.headers == 0
+    if layout.emptyLast ~= empty then
+        layout.emptyLast = empty
+        if empty then emptyText:Show() else emptyText:Hide() end
+    end
 
     ApplyLevels()
 end
 
--- CollectionsJournal est range par le gestionnaire de panneaux de Blizzard, colle au
--- bord gauche de l'ecran : a gauche, le panneau n'a jamais la place. Deplacer la
--- fenetre a la main ne tiendrait pas, le gestionnaire la replace a chaque panneau
--- ouvert ou ferme. On lui demande donc de la ranger plus a droite, par l'xoffset de
--- sa mise en page, et on rend la valeur d'origine des que l'arbre se ferme : les
--- autres onglets partagent la fenetre.
 local xOffsetBase
 
 local function SetWindowShift(window, shift)
@@ -607,46 +614,54 @@ local function SetWindowShift(window, shift)
     if window:IsShown() then UpdateUIPanelPositions(window) end
 end
 
--- Hors mode compact, le panneau est seul dans sa strate : rien a arbitrer. En mode
--- compact, il vit dans l'arbre et doit s'intercaler entre ses couches : au-dessus des
--- noeuds et de nos marques (noeud + MARK_LEVEL), sous les boutons de choix qu'Ebonhold
--- ouvre autour d'un noeud (noeud + 10) et sous la barre de progression (arbre + 15).
--- Restent quatre niveaux pour un contenu qui en empile cinq a l'etat naturel : ils sont
--- donc poses a la main, chaque bouton toujours au-dessus de ce qui le porte, sans quoi
--- il ne recevrait plus les clics.
-ApplyLevels = function()
+local leveledBase, leveledHeaders, leveledRows = nil, 0, 0
+
+local function LevelChildren(level, ...)
+    for i = 1, select("#", ...) do
+        local child = select(i, ...)
+        child:SetFrameLevel(level)
+    end
+end
+
+local function LevelRow(row, base)
+    row:SetFrameLevel(base + 2)
+    row.menuBtn:SetFrameLevel(base + 3)
+    row.activateBtn:SetFrameLevel(base + 3)
+    row.onBtn:SetFrameLevel(base + 3)
+    row.offBtn:SetFrameLevel(base + 3)
+end
+
+ApplyLevels = function(force)
     if not panel then return end
 
     local base
     if NS.Data.IsCompact() and _G.skillTreeCanvas then
-        -- Les noeuds sont les enfants directs du canevas.
         base = skillTreeCanvas:GetFrameLevel() + 1 + NS.Overlay.MARK_LEVEL + 1
     else
         base = panel:GetParent():GetFrameLevel() + 1
     end
 
-    panel:SetFrameLevel(base)
-    sideBtn:SetFrameLevel(base + 1)
-    collapseBtn:SetFrameLevel(base + 1)
-    menuBtn:SetFrameLevel(base + 1)
-    updateBtn:SetFrameLevel(base + 1)
-    scroll:SetFrameLevel(base + 1)
-    scrollChild:SetFrameLevel(base + 1)
+    if force or base ~= leveledBase then
+        leveledBase, leveledHeaders, leveledRows = base, 0, 0
 
-    local bar = _G[scroll:GetName() .. "ScrollBar"]
-    if bar then
-        bar:SetFrameLevel(base + 2)
-        for _, child in ipairs({ bar:GetChildren() }) do child:SetFrameLevel(base + 3) end
+        panel:SetFrameLevel(base)
+        sideBtn:SetFrameLevel(base + 1)
+        collapseBtn:SetFrameLevel(base + 1)
+        menuBtn:SetFrameLevel(base + 1)
+        updateBtn:SetFrameLevel(base + 1)
+        scroll:SetFrameLevel(base + 1)
+        scrollChild:SetFrameLevel(base + 1)
+
+        local bar = _G[scroll:GetName() .. "ScrollBar"]
+        if bar then
+            bar:SetFrameLevel(base + 2)
+            LevelChildren(base + 3, bar:GetChildren())
+        end
     end
 
-    for _, header in ipairs(headerPool) do header:SetFrameLevel(base + 2) end
-    for _, row in ipairs(rowPool) do
-        row:SetFrameLevel(base + 2)
-        row.menuBtn:SetFrameLevel(base + 3)
-        row.activateBtn:SetFrameLevel(base + 3)
-        row.onBtn:SetFrameLevel(base + 3)
-        row.offBtn:SetFrameLevel(base + 3)
-    end
+    for i = leveledHeaders + 1, #headerPool do headerPool[i]:SetFrameLevel(base + 2) end
+    for i = leveledRows + 1, #rowPool do LevelRow(rowPool[i], base) end
+    leveledHeaders, leveledRows = #headerPool, #rowPool
 end
 
 local DIALOG_BACKDROP = {
@@ -656,7 +671,6 @@ local DIALOG_BACKDROP = {
     insets = { left = 11, right = 12, top = 12, bottom = 11 },
 }
 
--- La bordure de dialogue a des coins de 32 : sur une languette de 40, ils se chevauchent.
 local TAB_BACKDROP = {
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -669,8 +683,6 @@ local GLASS_BACKDROP = {
     tile = true, tileSize = 16,
 }
 
--- Un addon ne peut pas flouter ce qui est dessine dessous : le verre du mode compact est
--- un voile noir, un grain etire par-dessus, et un fondu sur le bord qui touche l'arbre.
 local function ApplyLook(compact, collapsed, side)
     if compact then
         panel:SetBackdrop(GLASS_BACKDROP)
@@ -682,8 +694,6 @@ local function ApplyLook(compact, collapsed, side)
         grain:Hide()
     end
 
-    -- Le fondu deborde du panneau vers l'arbre : il adoucit la coupure sans agrandir la
-    -- zone qui capte la souris.
     if compact and not collapsed then
         local inner = (side == "LEFT") and "RIGHT" or "LEFT"
         fade:ClearAllPoints()
@@ -710,21 +720,12 @@ local function ApplyLayout()
     local window = GetTreeWindow()
     local width = collapsed and TAB_WIDTH or PANEL_WIDTH
 
-    -- Dedans, le panneau ne deborde plus : la fenetre n'a pas a s'ecarter.
     SetWindowShift(window, (not compact and side == "LEFT") and (width + PANEL_GAP) or 0)
 
-    -- En mode compact, le panneau est un enfant de l'arbre : il s'intercale entre ses
-    -- couches et le suit quand la fenetre passe au premier plan. Dehors, il reste en
-    -- DIALOG : sur un ecran trop etroit, le clamp le fait mordre sur la fenetre, qui est
-    -- en HIGH et se remet au premier plan de sa strate des qu'on la clique.
     local host = compact and skillTreeFrame or UIParent
     if panel:GetParent() ~= host then panel:SetParent(host) end
     panel:SetFrameStrata(compact and skillTreeFrame:GetFrameStrata() or "DIALOG")
 
-    -- Dehors, le panneau touche la fenetre par son flanc oppose. Dedans, il se cale sur
-    -- le bord de la vue de l'arbre, qui s'arrete au-dessus de la barre du bas — la vue
-    -- telle qu'Ebonhold la pose : l'apercu en fait reculer le coin haut-gauche, et le
-    -- panneau ne doit pas le suivre.
     local anchor, panelEdge, anchorEdge, x, topY, bottomY
     if compact then
         panelEdge, anchorEdge = side, side
@@ -752,7 +753,6 @@ local function ApplyLayout()
 
     ApplyLook(compact, collapsed, side)
 
-    -- Replie, le panneau n'est plus qu'une languette : seul le bouton qui le rouvre reste.
     collapseBtn:ClearAllPoints()
     collapseBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", collapsed and 6 or 36, -8)
     collapseBtn:SetText(collapsed and L.BTN_EXPAND or L.BTN_COLLAPSE)
@@ -767,9 +767,8 @@ local function ApplyLayout()
     end
     UI.RefreshUpdateNotice()
 
-    ApplyLevels()
+    ApplyLevels(true)
 
-    -- En mode compact deplie, la vue se centre sur ce que le panneau laisse libre.
     NS.View.SetCovered(side, (compact and not collapsed) and PANEL_WIDTH or 0)
 end
 
@@ -789,13 +788,11 @@ local function CreateHeaderButtons()
         ApplyLayout()
     end)
 
-    -- Sa place et son libelle dependent de l'etat replie : ApplyLayout les pose.
     collapseBtn = CreateFrame("Button", "STAL_CollapseBtn", panel, "UIPanelButtonTemplate2")
     collapseBtn:SetSize(28, 20)
     collapseBtn:SetScript("OnClick", function()
         NS.Data.SetPanelCollapsed(not NS.Data.IsPanelCollapsed())
         ApplyLayout()
-        -- La liste ne se redessine pas tant qu'elle est repliee : elle se rattrape ici.
         UI.RefreshList()
     end)
 
@@ -807,7 +804,6 @@ local function CreateHeaderButtons()
         NS.Menus.ShowPanelMenu(self)
     end)
 
-    -- Occupe l'espace libre du bandeau, entre les boutons de gauche et le menu.
     updateBtn = CreateFrame("Button", "STAL_UpdateBtn", panel)
     updateBtn:SetHeight(20)
     updateBtn:SetPoint("LEFT", collapseBtn, "RIGHT", 6, 0)
@@ -849,8 +845,6 @@ local function CreateScrollArea()
     scrollChild:SetHeight(1)
     scroll:SetScrollChild(scrollChild)
 
-    -- Porte par la zone de defilement, pas par le panneau : il disparait avec elle
-    -- quand le panneau se replie.
     emptyText = scroll:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     emptyText:SetPoint("TOP", scroll, "TOP", 0, -10)
     emptyText:SetWidth(PANEL_WIDTH - 30)
@@ -864,8 +858,6 @@ local function BuildPanel()
     panel:SetClampedToScreen(true)
     NS.View.Attach(panel)
 
-    -- Le panneau capte la souris sur toute sa surface, molette comprise : en mode
-    -- compact, un clic entre deux lignes ou un tour de molette n'atteint pas l'arbre.
     panel:EnableMouse(true)
     panel:EnableMouseWheel(true)
     panel:SetScript("OnMouseWheel", function() end)
@@ -881,14 +873,13 @@ local function BuildPanel()
     CreateHeaderButtons()
     CreateScrollArea()
 
+    if watched then return end
+
     local lastAshes, sinceCheck = nil, 0
     panel:SetScript("OnUpdate", function(_, elapsed)
         sinceCheck = sinceCheck + elapsed
         if sinceCheck < NS.ASHES_POLL_INTERVAL then return end
 
-        -- On retire l'intervalle au lieu de remettre a zero : le rythme reste
-        -- celui annonce, quelle que soit la duree d'une frame. Au-dela d'un tour
-        -- de retard, on repart de zero plutot que de rattraper en rafale.
         sinceCheck = sinceCheck - NS.ASHES_POLL_INTERVAL
         if sinceCheck > NS.ASHES_POLL_INTERVAL then sinceCheck = 0 end
 
@@ -901,37 +892,131 @@ local function BuildPanel()
     end)
 end
 
+local PREWARM_DELAY = 1
+
+local prewarming, prewarmDone, prewarmDriver
+
+local function FirePrewarm()
+    prewarmDone = true
+
+    local onShow = skillTreeFrame:GetScript("OnShow")
+    if not onShow then return end
+
+    prewarming = true
+    local ok, err = pcall(onShow, skillTreeFrame)
+    prewarming = false
+
+    if not ok then NS.LogError(string.format(L.MSG_INIT_FAILED, "Prewarm", tostring(err))) end
+end
+
+local function TickPrewarm(self, elapsed)
+    if elapsed > 0.1 then elapsed = 0.1 end
+    self.timer = self.timer + elapsed
+    if self.timer < PREWARM_DELAY then return end
+
+    self:Hide()
+
+    if CollectionsJournal and CollectionsJournal:IsVisible() then
+        prewarmDone = true
+        return
+    end
+
+    FirePrewarm()
+end
+
+function UI.IsPrewarming()
+    return prewarming == true
+end
+
+function UI.Prewarm()
+    if prewarmDone or prewarming then return end
+    if not _G.skillTreeFrame then return end
+
+    if _G.skillTreeNode1 then
+        prewarmDone = true
+        return
+    end
+
+    if not prewarmDriver then
+        prewarmDriver = CreateFrame("Frame")
+        prewarmDriver:SetScript("OnUpdate", TickPrewarm)
+    end
+
+    prewarmDriver.timer = 0
+    prewarmDriver:Show()
+end
+
 local function ShowPanel()
+    if prewarming then return end
+
     BuildPanel()
     if not panel then return end
 
-    -- A chaque ouverture et pas seulement a la creation : la fenetre a ete rendue a sa
-    -- place a la fermeture de l'arbre, et ses niveaux ont pu bouger depuis.
     ApplyLayout()
     panel:Show()
+    panelShown = true
     NS.Core.InvalidateSnapshot()
     UI.RefreshList()
 end
 
 local function HidePanel()
+    if prewarming then return end
+
     NS.Overlay.Hide()
     tooltipRow = nil
+    panelShown = false
     if panel then panel:Hide() end
 
     NS.View.Cancel()
 
-    -- Changer d'onglet cache l'arbre sans fermer la fenetre : les autres onglets la
-    -- retrouvent a sa place.
     SetWindowShift(GetTreeWindow(), 0)
+end
+
+local function FlushRefresh(self)
+    self:Hide()
+    refreshQueued = false
+    NS.Core.InvalidateSnapshot()
+    if panelShown then UI.RefreshList() end
+end
+
+local function QueueRefresh()
+    if refreshQueued or not panelShown then return end
+    refreshQueued = true
+    refreshDriver:Show()
+end
+
+local function InstallWatch()
+    if type(_G.refreshAccessibility) ~= "function" then return end
+
+    refreshDriver = CreateFrame("Frame")
+    refreshDriver:Hide()
+    refreshDriver:SetScript("OnUpdate", FlushRefresh)
+    hooksecurefunc("refreshAccessibility", QueueRefresh)
+    watched = true
 end
 
 function UI.Init()
     if not _G.skillTreeFrame then return end
 
+    InstallWatch()
     skillTreeFrame:HookScript("OnShow", ShowPanel)
     skillTreeFrame:HookScript("OnHide", HidePanel)
     NS.View.Init()
 
-    -- IsVisible et non IsShown : l'onglet de l'arbre reste "montre" fenetre fermee.
     if skillTreeFrame:IsVisible() then ShowPanel() end
 end
+
+UI.__test = {
+    Tick = TickPrewarm,
+    Fire = FirePrewarm,
+    Driver = function() return prewarmDriver end,
+    State = function() return prewarming, prewarmDone end,
+    Reset = function()
+        prewarming, prewarmDone = nil, nil
+        if prewarmDriver then prewarmDriver:Hide() end
+    end,
+    Delays = function() return PREWARM_DELAY end,
+    Watch = function() return watched, refreshQueued, refreshDriver end,
+    Queue = QueueRefresh,
+    Pools = function() return headerPool, rowPool end,
+}

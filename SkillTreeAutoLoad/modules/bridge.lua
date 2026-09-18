@@ -9,12 +9,13 @@ local CHUNK_TIMEOUT = 15
 local MAX_CHUNKS = 64
 local MAX_SOUL_ASHES = 1000000000
 
+local LOADOUT_FIRST_TRY = 2
+local LOADOUT_RETRY = 5
+local LOADOUT_MAX_TRIES = 12
+
 local loadoutId, loadoutName
 local serverSpendable, serverCommitted
 
--- nil tant qu'aucun message de loadouts n'a ete lu. Une table vide dit « le
--- serveur n'a rien d'engage », nil dit « je ne sais pas encore » : confondre les
--- deux fait payer au joueur un arbre qu'il possede deja.
 local serverNodes
 
 local inflight = {}
@@ -22,9 +23,6 @@ local installed = false
 local warnedForeign = false
 local opLoadouts, opBalance
 
--- ProjectEbonhold s'envoie ses paquets a lui-meme en whisper. Tout ce qui vient
--- d'un autre expediteur est le message d'un joueur, pas une reponse du serveur —
--- et ces valeurs repartent ensuite dans la trame que l'on ecrit au serveur.
 local function IsOwnClient(dist, sender)
     if dist and dist ~= "WHISPER" then return false end
     if sender and sender ~= UnitName("player") then
@@ -45,16 +43,10 @@ local function StoreBalance(spendable, committed)
         return false
     end
 
-    -- Le solde annonce par le serveur est la seule base de verite : on le garde
-    -- tel quel, sans jamais le recalculer ni l'accumuler.
     serverSpendable, serverCommitted = s, c
     return true
 end
 
--- L'identite ne se devine pas. Meme regle de repli qu'ApplyLoadoutsFromServer
--- cote ProjectEbonhold : l'id annonce, sinon le loadout 0, sinon rien. Prendre
--- « le premier de la liste » ferait envoyer la build courante sous le nom d'un
--- autre loadout, que le serveur ecraserait sans rien demander.
 local function PickLoadout(loadoutsPart, selectedId)
     local exact, fallback
 
@@ -79,8 +71,6 @@ local function PickLoadout(loadoutsPart, selectedId)
 end
 
 local function ReadNodes(chosen)
-    -- nil tant que TalentDatabase n'est pas chargee : on ne filtre que ce que
-    -- l'on sait juger, sinon un demarrage tot viderait le loadout du joueur.
     local defs = NS.Core.GetNodeDefs()
     local nodes, dropped = {}, 0
 
@@ -100,8 +90,6 @@ local function ReadNodes(chosen)
     return nodes
 end
 
--- Le serveur a parle et aucun loadout ne se laisse identifier : PE, dans ce cas,
--- repart d'un arbre vide sans identite. On dit la meme chose que lui.
 local function ForgetIdentity()
     loadoutId, loadoutName = nil, nil
     serverNodes = {}
@@ -132,9 +120,6 @@ local function ParseLoadouts(body)
 
     local id, name = tonumber(chosen[1]), chosen[2]
 
-    -- Le corps sortant se decoupe sur « | » : un nom qui en contient produirait
-    -- une trame que le serveur relirait de travers. On refuse plutot que de
-    -- renommer le loadout du joueur dans son dos.
     if not id or type(name) ~= "string" or name == "" or name:find("|", 1, true) then
         ForgetIdentity()
         NS.LogWarn(string.format(L.MSG_BAD_LOADOUT_IDENTITY, tostring(chosen[2])))
@@ -154,9 +139,6 @@ end
 local function CollectChunk(mid, idx, tot, slice)
     local total, i = tonumber(tot, 16), tonumber(idx, 16)
 
-    -- Sans ces bornes, un index hors plage gonfle le compteur sans remplir la
-    -- case correspondante : le message se croit complet, et table.concat leve
-    -- sur le trou. Le dispatch de PE fait le meme controle.
     if not (total and i) or total < 1 or total > MAX_CHUNKS or i < 1 or i > total then
         NS.LogWarn(string.format(L.MSG_BAD_CHUNK, tostring(idx), tostring(tot)))
         return nil
@@ -166,8 +148,6 @@ local function CollectChunk(mid, idx, tot, slice)
     PurgeStaleChunks(now)
 
     local rec = inflight[mid]
-    -- Deux messages differents sous le meme identifiant : on repart de zero
-    -- plutot que de coudre ensemble deux corps qui n'ont rien a voir.
     if not rec or rec.total ~= total then
         rec = { total = total, got = 0, parts = {}, started = now }
         inflight[mid] = rec
@@ -200,10 +180,6 @@ local function OnAddonMessage(prefix, payload, dist, sender)
 
     local evt = tonumber(evtStr)
 
-    -- Le serveur annonce aussi la reserve hors loadout, quand le joueur gagne
-    -- des cendres. Sans cette ecoute, notre solde reste celui du dernier
-    -- loadout recu, et la remise a plat d'ApplyBuild effacerait de l'affichage
-    -- tout ce qui a ete gagne depuis.
     if opBalance and evt == opBalance then
         local spendable, committed = rest:match("(%d+),(%d+)")
         if spendable then StoreBalance(spendable, committed) end
@@ -247,6 +223,35 @@ local function RestorePayload(body)
     return loadoutId .. "|" .. loadoutName .. "|" .. nodes, #additions
 end
 
+local function TickLoadoutRequest(self, elapsed)
+    if serverNodes then
+        self:Hide()
+        return
+    end
+
+    self.due = self.due - elapsed
+    if self.due > 0 then return end
+
+    if self.left <= 0 then
+        self:Hide()
+        return
+    end
+
+    self.left = self.left - 1
+    self.due = LOADOUT_RETRY
+
+    local request = ProjectEbonhold and ProjectEbonhold.RequestLoadoutFromServer
+    if request then pcall(request) end
+end
+
+local function StartLoadoutRequest()
+    if not (ProjectEbonhold and ProjectEbonhold.RequestLoadoutFromServer) then return end
+
+    local driver = CreateFrame("Frame")
+    driver.due, driver.left = LOADOUT_FIRST_TRY, LOADOUT_MAX_TRIES
+    driver:SetScript("OnUpdate", TickLoadoutRequest)
+end
+
 function Bridge.HasLoadoutIdentity()
     return loadoutId ~= nil and loadoutName ~= nil and loadoutName ~= ""
         and serverNodes ~= nil
@@ -261,7 +266,6 @@ function Bridge.GetServerBalance()
 end
 
 function Bridge.Init()
-    -- Deux installations poseraient deux enveloppes autour du meme envoi.
     if installed then return end
 
     if not (ProjectEbonhold and ProjectEbonhold.sendToServer and ProjectEbonhold.CS) then
@@ -269,8 +273,6 @@ function Bridge.Init()
         return
     end
 
-    -- Les opcodes se lisent chez ProjectEbonhold, jamais recopies : une
-    -- renumerotation cote serveur doit se voir, pas casser le pont en silence.
     local SS = ProjectEbonhold.SS
     opLoadouts = SS and SS.SEND_LOADOUTS
     opBalance = SS and SS.SEND_PLAYER_UPDATED_COMMITTED_SOUL_POINTS
@@ -282,8 +284,6 @@ function Bridge.Init()
     local listener = CreateFrame("Frame")
     listener:RegisterEvent("CHAT_MSG_ADDON")
     listener:SetScript("OnEvent", function(_, _, prefix, payload, dist, sender)
-        -- Une erreur de lecture ne doit pas remonter au joueur sous forme
-        -- d'erreur Lua : PE protege deja ses propres handlers de la meme facon.
         local ok, err = pcall(OnAddonMessage, prefix, payload, dist, sender)
         if not ok then NS.LogError(string.format(L.MSG_BRIDGE_ERROR, tostring(err))) end
     end)
@@ -302,8 +302,6 @@ function Bridge.Init()
         return originalSend(id, body)
     end
 
-    -- Le serveur ne re-annonce pas le solde apres une validation reussie : on le
-    -- lui redemande, exactement ce que provoque un reload.
     local onApplyResult = ProjectEbonhold.SkillTree
         and ProjectEbonhold.SkillTree.OnApplyChangesResult
     if onApplyResult and ProjectEbonhold.RequestLoadoutFromServer then
@@ -313,5 +311,14 @@ function Bridge.Init()
         end
     end
 
+    StartLoadoutRequest()
+
     installed = true
 end
+
+Bridge.__test = {
+    Tick = TickLoadoutRequest,
+    Start = StartLoadoutRequest,
+    Delays = function() return LOADOUT_FIRST_TRY, LOADOUT_RETRY, LOADOUT_MAX_TRIES end,
+    SetServerNodes = function(nodes) serverNodes = nodes end,
+}

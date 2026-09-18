@@ -35,8 +35,23 @@ function NS.LogWarn(msg)
     NS.Log(NS.Colorize(COLOR.WARN, msg))
 end
 
+local floor = math.floor
+local costText, costTextCount = {}, 0
+local COST_TEXT_CAP = 4096
+
 function NS.FormatCost(n)
-    local s = tostring(math.floor(tonumber(n) or 0))
-    local out = s:reverse():gsub("(%d%d%d)", "%1 "):reverse()
-    return (out:gsub("^%s+", ""))
+    n = floor(tonumber(n) or 0)
+    local s = costText[n]
+    if s then return s end
+
+    local out = tostring(n):reverse():gsub("(%d%d%d)", "%1 "):reverse()
+    s = (out:gsub("^%s+", ""))
+
+    if costTextCount >= COST_TEXT_CAP then
+        for k in pairs(costText) do costText[k] = nil end
+        costTextCount = 0
+    end
+    costText[n] = s
+    costTextCount = costTextCount + 1
+    return s
 end

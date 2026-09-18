@@ -70,6 +70,7 @@ NS.L = {
     MSG_MIGRATED = "%s's saves were transferred to the account: %d imported, %d already present.",
 
     MSG_INIT_FAILED = "Startup failed (%s): %s",
+    MSG_ZOOM_FAILED = "Zoom error: %s. The Skill Tree's own zoom has been restored.",
     MSG_BRIDGE_ERROR = "Server communication error: %s",
     MSG_NO_OPCODE = "ProjectEbonhold.SS.SEND_LOADOUTS is missing: server communication is disabled.",
     MSG_FOREIGN_PAYLOAD = "Server message ignored: it did not come from your client (sender: %s).",

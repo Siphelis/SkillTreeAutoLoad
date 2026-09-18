@@ -71,6 +71,7 @@ L.MSG_NO_LOADOUT_ID = "Impossible d'identifier la configuration active. Ouvrez u
 L.MSG_MIGRATED = "Transfert des sauvegardes de %s vers le compte — importées : %d ; déjà présentes : %d."
 
 L.MSG_INIT_FAILED = "Échec du démarrage (%s) : %s"
+L.MSG_ZOOM_FAILED = "Erreur de zoom : %s. Le zoom d'origine du Skill Tree a été rétabli."
 L.MSG_BRIDGE_ERROR = "Erreur de communication avec le serveur : %s"
 L.MSG_NO_OPCODE = "ProjectEbonhold.SS.SEND_LOADOUTS est absent : la communication avec le serveur est désactivée."
 L.MSG_FOREIGN_PAYLOAD = "Message serveur ignoré : il ne provient pas de votre propre client (expéditeur : %s)."

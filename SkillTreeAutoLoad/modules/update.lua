@@ -9,10 +9,6 @@ NS.Update = Update
 
 Update.URL = "https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest"
 
--- Un addon 3.3.5 n'a pas acces a internet : la seule source d'une version plus
--- recente, ce sont les autres joueurs. Chacun annonce la sienne sur un canal que
--- le chat n'affiche pas (rejoint sans etre ajoute a une fenetre), et ceux qui ont
--- mieux repondent a ceux qui ont moins bien.
 local CHANNEL = "stalversion"
 local TAG = "STAL1:V:"
 local START_DELAY = 10
@@ -29,8 +25,6 @@ local replyAt, lastReplyAt
 local notified
 local ticker, sinceTick = nil, 0
 
--- Une version de travail porte un suffixe de build (1.8.0-2) : elle ecoute mais
--- ne parle jamais, sinon elle annoncerait une version pas encore publiee.
 local function Parse(text)
     if type(text) ~= "string" or #text > 20 then return nil end
 
@@ -82,8 +76,6 @@ local function OnVersion(text, now)
 
     local order = Compare(theirs, own)
     if order >= 0 then
-        -- Quelqu'un d'au moins aussi a jour vient de parler : la reponse est faite, et
-        -- elle compte pour tout le canal dans le delai entre deux reponses.
         replyAt = nil
         lastReplyAt = now
         if order == 0 then return end
@@ -93,9 +85,6 @@ local function OnVersion(text, now)
         if not known or Compare(theirs, known) > 0 then state.latest = text end
         Notify()
     elseif isRelease and not replyAt then
-        -- Delai aleatoire : parmi tous ceux qui pourraient repondre, le premier qui
-        -- parle fait taire les autres. Une demande trop proche de la derniere reponse
-        -- est repoussee, jamais ignoree : ce joueur-la ne l'a pas entendue.
         replyAt = now + REPLY_MIN + math.random() * (REPLY_MAX - REPLY_MIN)
         if lastReplyAt then replyAt = math.max(replyAt, lastReplyAt + REPLY_COOLDOWN) end
         ticker:Show()
@@ -154,8 +143,6 @@ function Update.Init()
     local known = Parse(state.latest)
     if not known or Compare(known, own) <= 0 then state.latest = nil end
 
-    -- Chaque creation de save recharge l'interface : sans cet ecart, chaque
-    -- rechargement republierait la version et rappellerait la mise a jour.
     local stamp = time()
     newSession = type(state.sessionAt) ~= "number" or stamp - state.sessionAt >= SESSION_GAP
     if newSession then state.sessionAt = stamp else notified = Update.GetAvailable() end

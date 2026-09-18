@@ -6,10 +6,6 @@ local Colorize = NS.Colorize
 local Menus = {}
 NS.Menus = Menus
 
--- Un nom se lit dans une liste : on retire les bords, les codes couleur colles
--- depuis un chat et les caracteres de controle, puis on refuse ce qui n'en laisse
--- rien. Sans ce filtre, une saisie faite d'espaces cree une ligne invisible que
--- le joueur ne peut plus ni retrouver ni renommer.
 local function CleanName(raw)
     if type(raw) ~= "string" then return nil end
 
@@ -70,9 +66,6 @@ StaticPopupDialogs["STAL_CONFIRM"] = {
     preferredIndex = 3,
 }
 
--- Un lien ne se clique pas dans ce client : on le donne pret a copier. Le champ
--- revient au lien a chaque frappe, et maxLetters a 0 leve la limite laissee par
--- le dernier dialogue a champ, qui partage le meme cadre.
 local function ResetLink(editBox)
     if editBox:GetText() ~= NS.Update.URL then editBox:SetText(NS.Update.URL) end
     editBox:HighlightText()
@@ -141,9 +134,6 @@ local function OpenMenu(anchor)
     local list = _G["DropDownList1"]
     if not (list and list:IsShown()) then return end
 
-    -- La liste s'ouvre loin de l'arbre, sauf en mode compact : le panneau est alors
-    -- dans la fenetre, et c'est vers l'interieur, par-dessus le panneau, qu'elle
-    -- reste dans la fenetre.
     list:ClearAllPoints()
     if NS.Data.IsCompact() or NS.Data.GetPanelSide() == "LEFT" then
         list:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, 0)
@@ -236,9 +226,6 @@ function Menus.ShowSaveMenu(saveId, anchor)
                     end
                 end
 
-                -- Une save ne retrecit pas par accident. Le ReloadUI qui suit
-                -- grave le resultat sur le disque : si la capture contient moins
-                -- que ce qu'elle remplace, c'est au joueur de le confirmer.
                 local newCount = CountNodes(nodeRanks)
                 local oldCount = CountNodes(save.nodeRanks)
                 if newCount < oldCount then

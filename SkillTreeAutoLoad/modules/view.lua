@@ -3,13 +3,6 @@ local NS = SkillTreeAutoLoad
 local View = {}
 NS.View = View
 
--- Tout ce qui deplace ou zoome la vue de l'arbre passe par ici : le decalage du mode
--- compact et l'apercu d'une save se disputeraient sinon la meme vue, chacun prenant
--- les mouvements de l'autre pour un recentrage d'Ebonhold.
-
--- L'apercu descend sous le zoom minimum d'Ebonhold (0.5) : le joueur connait l'arbre, ce
--- qu'il cherche est ou la save le touche. L'arbre entier tient vers 0.16 ; ce plancher
--- ne sert qu'a un arbre qui grandirait assez pour ne plus tenir du tout.
 local SAFETY_MIN_ZOOM = 0.1
 
 local HOVER_DELAY = 0.3
@@ -25,7 +18,6 @@ local ARROW_TEXTURES = {
     BOTTOM = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up",
 }
 
--- Le compteur se pose du cote interieur de la fleche, jamais contre le bord.
 local COUNT_ANCHORS = {
     LEFT = { "LEFT", "RIGHT", 2, 0 },
     RIGHT = { "RIGHT", "LEFT", -2, 0 },
@@ -37,14 +29,9 @@ local panel, driver
 local covered, coveredSide = 0, "RIGHT"
 local viewShift, draggingTree, driving = 0, false, false
 
--- Ancrage de la vue tel qu'Ebonhold le pose (coin haut-gauche et bas-droit sur l'arbre),
--- et le recul que l'apercu applique a son coin haut-gauche. Nil si l'ancrage n'a pas la
--- forme attendue : l'apercu renonce alors a centrer un arbre plus petit que la vue.
 local base
 local padX, padY = 0, 0
 
--- Apercu. `origin` est la vue du joueur avant le premier apercu, rendue quand la souris
--- quitte le panneau ; `target` la save cadree ; `pending` celle qui attend son delai.
 local origin, target, pending, anim
 local hovering, warnedKey = false, nil
 local arrows = {}
@@ -55,8 +42,6 @@ local function Clamp(value, low, high)
     return value
 end
 
--- Mode diagnostic, eteint par defaut et bascule par /staldiag : il suit un apercu de bout
--- en bout, du nombre de noeuds trouves jusqu'au defilement reellement applique.
 local debugging = false
 
 local function Diag(text, ...)
@@ -92,17 +77,12 @@ local function CaptureBase(view)
     }
 end
 
--- La vue ne defile pas en negatif : le client ramene la position a zero. Pour centrer un
--- arbre plus petit qu'elle, on recule donc son coin haut-gauche d'autant ; le cadre se
--- retrecit, mais l'arbre qu'il montre tient dedans.
 local function SetPadding(x, y)
     if not base or (x == padX and y == padY) then return end
     padX, padY = x, y
     skillTreeScroll:SetPoint("TOPLEFT", base.frame, "TOPLEFT", base.left + x, base.top - y)
 end
 
--- Taille et haut de la vue sans le recul de l'apercu : c'est dans ce repere que le
--- cadrage raisonne, quel que soit le recul du moment.
 local function ViewSize()
     if not base then return skillTreeScroll:GetWidth(), skillTreeScroll:GetHeight() end
     return base.frame:GetWidth() - base.left + base.right,
@@ -115,8 +95,6 @@ local function ViewTop()
     return frameTop and (frameTop + base.top)
 end
 
--- Ce que rien ne couvre dans la vue, en unites de la vue et y vers le bas : ni le
--- panneau en mode compact, ni la barre de progression qu'Ebonhold pose en haut.
 local function FreeRect()
     local width, height = ViewSize()
     local left, right = 0, width
@@ -132,19 +110,11 @@ local function FreeRect()
     return left, top, right, height
 end
 
--- Decalage du mode compact ---------------------------------------------------------
-
--- Ebonhold centre sur toute la largeur : a la premiere ouverture sur les noeuds de
--- depart, a chaque cran de zoom sur le milieu du canevas. En mode compact, la vue doit
--- se centrer sur ce que le panneau laisse libre. `viewShift` est le decalage que la
--- vue porte deja ; un recentrage d'Ebonhold le remet a zero.
 local function WantedShift()
     if covered == 0 then return 0 end
-    -- Le contenu glisse vers le cote degage, de la moitie de la largeur couverte.
     return (coveredSide == "LEFT") and -covered / 2 or covered / 2
 end
 
--- Renvoie le deplacement reellement obtenu : aux bords du canevas, la vue bute.
 local function MoveHorizontally(delta)
     local view = _G.skillTreeScroll
     if not view or delta == 0 then return 0 end
@@ -163,13 +133,46 @@ local function SyncShift()
     viewShift = viewShift + MoveHorizontally(WantedShift() - viewShift)
 end
 
--- Pilotage de la vue ----------------------------------------------------------------
+local ICON_HIDE_ZOOM = 0.50
+local iconButtons, iconsHidden = nil, false
 
--- Le zoom d'Ebonhold est prive et borne a 0.5. On refait donc son geste nous-memes :
--- l'echelle du canevas, et sa taille compensee d'autant, pour que la vue garde de quoi
--- defiler. Son zoom interne ne bouge jamais ; c'est pourquoi la fin de l'apercu remet
--- l'echelle ET la taille exactes d'origine, et que l'apercu ne passe jamais par sa
--- molette : les deux zooms ne doivent pas se contredire.
+local function CollectIcons()
+    if iconButtons then return iconButtons end
+
+    local defs = NS.Core.GetNodeDefs()
+    if not defs then return nil end
+
+    local list = {}
+    for nodeId in pairs(defs) do
+        local btn = _G["skillTreeNode" .. nodeId]
+        if btn and btn.icon then list[#list + 1] = btn end
+    end
+
+    if #list == 0 then return nil end
+
+    iconButtons = list
+    return list
+end
+
+local function SetIconsShown(shown)
+    if iconsHidden == not shown then return end
+
+    local buttons = CollectIcons()
+    if not buttons then return end
+
+    iconsHidden = not shown
+    for i = 1, #buttons do
+        local btn = buttons[i]
+        if shown then
+            btn.icon:Show()
+            if btn.rankText then btn.rankText:Show() end
+        else
+            btn.icon:Hide()
+            if btn.rankText then btn.rankText:Hide() end
+        end
+    end
+end
+
 local function SetZoom(zoom)
     local canvas = skillTreeCanvas
     local current = canvas:GetScale()
@@ -179,11 +182,10 @@ local function SetZoom(zoom)
     canvas:SetScale(zoom)
     canvas:SetSize(width / zoom, height / zoom)
 
+    SetIconsShown(zoom >= ICON_HIDE_ZOOM)
     NS.Overlay.Rescale()
 end
 
--- Le point du canevas qui occupe le centre de la zone libre. Le recul decale le canevas
--- d'autant vers la droite et le bas.
 local function ViewCenter()
     local view, zoom = skillTreeScroll, skillTreeCanvas:GetScale()
     local left, top, right, bottom = FreeRect()
@@ -191,16 +193,11 @@ local function ViewCenter()
         (view:GetVerticalScroll() - padY + (top + bottom) / 2) / zoom
 end
 
--- Position de defilement qui amene le point (cx, cy) du canevas au centre de la zone
--- libre, avant tout recul. Negative quand l'arbre, tres dezoome, est plus petit que la
--- vue : c'est le recul du coin haut-gauche qui rattrape ce que le client refuse.
 local function ScrollTarget(cx, cy, zoom)
     local left, top, right, bottom = FreeRect()
     return cx * zoom - (left + right) / 2, cy * zoom - (top + bottom) / 2
 end
 
--- Le recul, lui, est pose par l'appelant : le changer a chaque image redimensionne la
--- vue, ce qui coute aussi cher qu'un changement d'echelle.
 local function PlaceView(cx, cy)
     local view = skillTreeScroll
     local scrollX, scrollY = ScrollTarget(cx, cy, skillTreeCanvas:GetScale())
@@ -211,10 +208,6 @@ local function PlaceView(cx, cy)
     driving = false
 end
 
--- Rectangle d'un noeud sur le canevas, y vers le bas. Ebonhold ancre chaque bouton par
--- son coin haut-gauche sur le canevas : le decalage de l'ancre est sa position. Elle ne
--- bouge plus une fois l'arbre construit — le zoom met le canevas a l'echelle, pas ses
--- noeuds — et un cadrage en relit des centaines : on la retient.
 local nodeRects = {}
 
 local function NodeRect(nodeId)
@@ -255,9 +248,6 @@ local function FitZoom(minX, minY, maxX, maxY)
     return math.min(width / math.max(maxX - minX, 1), height / math.max(maxY - minY, 1))
 end
 
--- Le cadrage vise toute la save. Si elle ne tient pas meme au plancher de securite, il
--- se rabat sur ce qui compte : ce que le clic prendrait en mode progressif, sinon la
--- branche la plus fournie. Il ne zoome jamais plus pres que le joueur.
 local function ComputeFraming(missing, affordable)
     local minX, minY, maxX, maxY = Bounds(missing)
     if not minX then
@@ -288,8 +278,6 @@ local function ComputeFraming(missing, affordable)
     return zoom, (minX + maxX) / 2, (minY + maxY) / 2
 end
 
--- Fleches sur les bords -------------------------------------------------------------
-
 local function HideArrows()
     for _, arrow in pairs(arrows) do arrow:Hide() end
 end
@@ -313,10 +301,6 @@ local function GetArrow(side)
     return arrow
 end
 
--- Une fleche par bord de la zone libre derriere lequel des noeuds de la save restent
--- caches, avec leur nombre. Un noeud en diagonale compte pour le bord qu'il depasse le
--- plus. La fleche glisse le long de son bord, a hauteur moyenne des noeuds qu'elle
--- annonce : elle pointe vers eux, pas seulement dans leur direction.
 local function ShowArrows(missing)
     HideArrows()
     if not (missing and TreeVisible()) then return end
@@ -347,7 +331,6 @@ local function ShowArrows(missing)
         end
     end
 
-    -- Meme etage que le panneau compact : au-dessus des noeuds et de nos marques.
     local level = skillTreeCanvas:GetFrameLevel() + 1 + NS.Overlay.MARK_LEVEL + 1
     local edge = ARROW_INSET + ARROW_SIZE / 2
 
@@ -362,8 +345,6 @@ local function ShowArrows(missing)
             y = (side == "TOP") and (top + edge) or (bottom - edge)
         end
 
-        -- Posee dans le repere de la vue sans recul : le coin haut-gauche de la vue, lui,
-        -- a pu reculer.
         local arrow = GetArrow(side)
         arrow:ClearAllPoints()
         if base then
@@ -377,15 +358,150 @@ local function ShowArrows(missing)
     end
 end
 
--- Apercu ------------------------------------------------------------------------------
+local ZOOM_MIN, ZOOM_MAX, ZOOM_STEP_RATIO = 0.10, 2.50, 1.12
+local ZOOM_LABEL_HOLD = 1
+
+local ladder, ladderLabels, ladderCount
+local wheelNotches = 0
+local nativeWheel, wheelBroken
+local zoomLabelUntil
+
+local floor, log, GetCursorPosition = math.floor, math.log, GetCursorPosition
+
+local function BuildLadder()
+    if ladder then return end
+
+    local steps = math.ceil(log(ZOOM_MAX / ZOOM_MIN) / log(ZOOM_STEP_RATIO))
+    local ratio = (ZOOM_MAX / ZOOM_MIN) ^ (1 / steps)
+
+    ladder, ladderLabels, ladderCount = {}, {}, steps + 1
+    for i = 1, ladderCount do
+        ladder[i] = ZOOM_MIN * ratio ^ (i - 1)
+    end
+
+    ladder[1], ladder[ladderCount] = ZOOM_MIN, ZOOM_MAX
+
+    for i = 1, ladderCount do
+        ladderLabels[i] = "Zoom: " .. floor(ladder[i] * 100 + 0.5) .. "%"
+    end
+end
+
+local function NearestIndex(zoom)
+    local lo, hi = 1, ladderCount
+    while lo < hi do
+        local mid = floor((lo + hi) * 0.5)
+        if ladder[mid] < zoom then lo = mid + 1 else hi = mid end
+    end
+
+    if lo > 1 and (zoom - ladder[lo - 1]) < (ladder[lo] - zoom) then return lo - 1 end
+    return lo
+end
+
+local function AnchorScroll(scroll, offset, ratio)
+    return (scroll + offset) * ratio - offset
+end
+
+local function CursorOffsets(view)
+    local left, top = view:GetLeft(), view:GetTop()
+    if not (left and top) then return nil end
+
+    local scale = view:GetEffectiveScale()
+    local x, y = GetCursorPosition()
+    return x / scale - left, top - y / scale
+end
+
+local function AbandonPreview()
+    if not origin then return end
+
+    origin, target, pending, anim = nil, nil, nil, nil
+    HideArrows()
+    NS.Overlay.Rescale()
+    SetPadding(0, 0)
+end
+
+local function ShowZoomLabel(index)
+    local fs = skillTreeFrame.zoomText
+    if not fs then
+        fs = skillTreeFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        fs:SetPoint("TOP", skillTreeFrame, "TOP", 0, -10)
+        skillTreeFrame.zoomText = fs
+    end
+
+    local label = ladderLabels[index]
+    if fs.stalLabel ~= label then
+        fs.stalLabel = label
+        fs:SetText(label)
+    end
+
+    zoomLabelUntil = GetTime() + ZOOM_LABEL_HOLD
+end
+
+local function ApplyWheel(notches)
+    if not TreeVisible() then return end
+
+    BuildLadder()
+
+    AbandonPreview()
+
+    local view = skillTreeScroll
+    local from = skillTreeCanvas:GetScale()
+
+    local index = NearestIndex(from) + notches
+    if index < 1 then
+        index = 1
+    elseif index > ladderCount then
+        index = ladderCount
+    end
+
+    local to = ladder[index]
+    if to == from then return end
+
+    local offsetX, offsetY = CursorOffsets(view)
+    if not offsetX then return end
+
+    local ratio = to / from
+    local h = AnchorScroll(view:GetHorizontalScroll(), offsetX, ratio)
+    local v = AnchorScroll(view:GetVerticalScroll(), offsetY, ratio)
+
+    SetZoom(to)
+
+    driving = true
+    view:SetHorizontalScroll(Clamp(h, 0, math.max(0, view:GetHorizontalScrollRange())))
+    view:SetVerticalScroll(Clamp(v, 0, math.max(0, view:GetVerticalScrollRange())))
+    driving = false
+
+    ShowZoomLabel(index)
+end
+
+local function RestoreNativeWheel(err)
+    if wheelBroken then return end
+    wheelBroken = true
+
+    if nativeWheel and _G.skillTreeScroll then
+        skillTreeScroll:SetScript("OnMouseWheel", nativeWheel)
+    end
+    NS.LogError(string.format(NS.L.MSG_ZOOM_FAILED, tostring(err)))
+end
+
+local function OnTreeWheel(_, delta)
+    wheelNotches = wheelNotches + delta
+    if driver then driver:Show() end
+end
+
+local function ClearZoomLabel()
+    zoomLabelUntil = nil
+
+    local fs = skillTreeFrame and skillTreeFrame.zoomText
+    if fs and fs.stalLabel then
+        fs.stalLabel = nil
+        fs:SetText("")
+    end
+end
 
 local function Smooth(t)
     return t * t * (3 - 2 * t)
 end
 
--- Les cadres ne vivent que sur une vue posee. Les garder pendant la transition obligeait
--- a les redimensionner a chaque palier de zoom, des centaines a la fois, en plus du
--- replacement de l'arbre : c'est ce cumul qui hachait le retour a la vue d'origine.
 local function ShowMarks()
     if not (target and target.missing) then return end
 
@@ -397,7 +513,6 @@ local function ShowMarks()
         skillTreeCanvas:GetScale(), view:GetHorizontalScroll(), view:GetVerticalScroll(),
         padX, padY, skipped or 0)
 
-    -- Une seule fois par save : sinon chaque survol repeterait le message.
     if skipped and skipped > 0 and warnedKey ~= target.key then
         warnedKey = target.key
         NS.LogWarn(string.format(NS.L.MSG_NODES_NOT_IN_TREE, skipped))
@@ -408,14 +523,9 @@ local function StartAnimation(zoom, cx, cy, restore)
     local fromZoom = skillTreeCanvas:GetScale()
     local fromX, fromY = ViewCenter()
 
-    -- Changer l'echelle replace les ~3000 elements de l'arbre : une seule fois par
-    -- transition, et du cote ou elle se voit le moins. En s'eloignant, tout de suite ; en
-    -- se rapprochant, a l'arrivee. Le trajet se fait donc toujours a la plus petite des
-    -- deux echelles, la ou le mouvement est le plus lisible.
     local zoomedOut = zoom < fromZoom
     if zoomedOut then SetZoom(zoom) end
 
-    -- Recul pose une fois pour toute la transition, au plus large des deux besoins.
     local panZoom = zoomedOut and zoom or fromZoom
     local startX, startY = ScrollTarget(fromX, fromY, panZoom)
     local endX, endY = ScrollTarget(cx, cy, panZoom)
@@ -441,13 +551,11 @@ local function StartRestore()
         (origin.scrollY + (top + bottom) / 2) / origin.zoom, true)
 end
 
--- La fin du retour pose la vue exacte du joueur, et non un centre recalcule : c'est ce
--- qui garde juste le decalage du mode compact qu'elle portait, et le canevas tel
--- qu'Ebonhold l'avait dimensionne pour son propre zoom.
 local function FinishRestore()
     local canvas = skillTreeCanvas
     canvas:SetScale(origin.zoom)
     canvas:SetSize(origin.width, origin.height)
+    SetIconsShown(origin.zoom >= ICON_HIDE_ZOOM)
     NS.Overlay.Rescale()
     SetPadding(0, 0)
 
@@ -483,8 +591,6 @@ local function FrameTarget()
 
     local zoom, cx, cy = ComputeFraming(target.missing, target.affordable)
     if not zoom then
-        -- Aucun des noeuds restants n'existe dans l'arbre affiche : il n'y a rien a
-        -- cadrer, et c'est ShowMarks qui le dira au joueur.
         ShowMarks()
         return
     end
@@ -505,8 +611,17 @@ end
 local function OnUpdate()
     local now = GetTime()
 
+    if wheelNotches ~= 0 then
+        local notches = wheelNotches
+        wheelNotches = 0
+
+        local ok, err = pcall(ApplyWheel, notches)
+        if not ok then RestoreNativeWheel(err) end
+    end
+
+    if zoomLabelUntil and now >= zoomLabelUntil then ClearZoomLabel() end
+
     if pending and now >= pending.due then
-        -- Le delai a expire hors de toute save : la souris ne faisait que passer.
         if hovering and TreeVisible() then
             target = pending
             FrameTarget()
@@ -518,9 +633,6 @@ local function OnUpdate()
         local progress = math.min(1, (now - anim.startedAt) / TRANSITION)
         local eased = Smooth(progress)
 
-        -- Le zoom qui rapproche attendait l'arrivee : c'est ici qu'il se pose, avec le
-        -- recul que la nouvelle echelle demande. Un retour, lui, se termine par
-        -- FinishRestore, qui repose l'echelle, la taille et la vue exactes du joueur.
         if progress >= 1 and not anim.zoomedOut and not anim.restore then
             SetZoom(anim.toZoom)
             local endX, endY = ScrollTarget(anim.toX, anim.toY, anim.toZoom)
@@ -541,47 +653,34 @@ local function OnUpdate()
         end
     end
 
-    -- Passer d'une save a l'autre, ou par l'interligne, laisse la souris sur le
-    -- panneau : l'apercu tient. Il ne rend la vue qu'une fois le panneau quitte.
     if origin and not hovering and not (anim and anim.restore)
         and not (panel and panel:IsMouseOver()) then
         StartRestore()
     end
 
-    if not (pending or anim or origin) then driver:Hide() end
+    if not (pending or anim or origin or zoomLabelUntil) then driver:Hide() end
 end
-
--- API ---------------------------------------------------------------------------------
 
 function View.Init()
     local view = _G.skillTreeScroll
     if not view then return end
 
-    -- Lu ici, au chargement, tant que rien n'a encore touche a l'ancrage de la vue.
     base = CaptureBase(view)
 
     driver = CreateFrame("Frame")
     driver:Hide()
     driver:SetScript("OnUpdate", OnUpdate)
 
-    -- Le glisser d'Ebonhold passe lui aussi par SetHorizontalScroll : tant qu'un bouton
-    -- est enfonce sur l'arbre, ce n'est pas un recentrage.
+    nativeWheel = view:GetScript("OnMouseWheel")
+    view:SetScript("OnMouseWheel", OnTreeWheel)
+
     view:HookScript("OnMouseDown", function() draggingTree = true end)
     view:HookScript("OnMouseUp", function() draggingTree = false end)
 
     hooksecurefunc(view, "SetHorizontalScroll", function()
         if driving or draggingTree then return end
 
-        -- Ebonhold vient de recentrer : un cran de molette du joueur pendant le retour
-        -- d'un apercu, par exemple. Son zoom et la taille du canevas sont de nouveau les
-        -- siens ; rendre l'ancienne vue les contredirait, l'apercu s'efface donc sans
-        -- toucher a rien.
-        if origin then
-            origin, target, pending, anim = nil, nil, nil, nil
-            HideArrows()
-            NS.Overlay.Rescale()
-            SetPadding(0, 0)
-        end
+        AbandonPreview()
 
         viewShift = 0
         SyncShift()
@@ -592,27 +691,19 @@ function View.Attach(frame)
     panel = frame
 end
 
--- Outil de mise au point, pas une fonctionnalite : il ne coute rien tant qu'il est
--- eteint, et il n'a pas vocation a rester dans une version publiee.
 SLASH_STALDIAG1 = "/staldiag"
 SlashCmdList["STALDIAG"] = function()
     debugging = not debugging
     NS.Log("diagnostic de l'apercu : " .. (debugging and "actif" or "eteint"))
 end
 
--- Ancrage de la vue tel qu'Ebonhold le pose, sans le recul de l'apercu : le panneau
--- compact s'y cale, et ne doit pas suivre le coin haut-gauche quand il recule. Nil si
--- l'ancrage n'a pas la forme attendue.
 function View.GetViewInsets()
     if not base then return nil end
     return base.frame, base.left, base.top, base.right, base.bottom
 end
 
--- Largeur de vue que le panneau recouvre, et de quel cote ; zero hors mode compact.
 function View.SetCovered(side, width)
     if side ~= coveredSide or width ~= covered then
-        -- Un apercu cadre pour l'ancienne zone libre n'a plus de sens : la vue du joueur
-        -- est rendue d'un coup, avant de recaler le decalage.
         if origin then
             anim, pending = nil, nil
             HideArrows()
@@ -623,8 +714,6 @@ function View.SetCovered(side, width)
     SyncShift()
 end
 
--- Survol d'une save. `key` distingue une nouvelle save, qui attend son delai, d'un
--- rafraichissement de celle deja cadree (activation, bascule du mode), suivi aussitot.
 function View.Preview(key, missing, affordable)
     hovering = true
     HideArrows()
@@ -637,7 +726,6 @@ function View.Preview(key, missing, affordable)
 
     local entry = { key = key, missing = missing, affordable = affordable }
 
-    -- Sans cadrage, rien a attendre : les cadres se posent sur la vue telle quelle.
     if not NS.Data.IsPreviewCamera() then
         target, pending = entry, nil
         ShowMarks()
@@ -648,11 +736,7 @@ function View.Preview(key, missing, affordable)
         target, pending = entry, nil
         FrameTarget()
     else
-        -- Les cadres de la save precedente n'ont plus lieu d'etre, et ceux de la nouvelle
-        -- attendent que la vue soit posee : les afficher pendant la transition revenait a
-        -- les redimensionner a chaque palier de zoom.
         NS.Overlay.Hide()
-        -- Glisser de la ligne a l'un de ses boutons ne relance pas le delai.
         entry.due = (pending and pending.key == key) and pending.due or (GetTime() + HOVER_DELAY)
         pending = entry
     end
@@ -665,9 +749,10 @@ function View.Release()
     HideArrows()
 end
 
--- L'arbre se ferme : la vue du joueur revient d'un coup, sans transition invisible.
 function View.Cancel()
     draggingTree, hovering, pending, anim = false, false, nil, nil
+    wheelNotches = 0
+    ClearZoomLabel()
     HideArrows()
 
     if origin and _G.skillTreeScroll and _G.skillTreeCanvas then FinishRestore() end
@@ -675,3 +760,19 @@ function View.Cancel()
 
     if driver then driver:Hide() end
 end
+
+View.__test = {
+    BuildLadder = function() BuildLadder() return ladder, ladderLabels, ladderCount end,
+    NearestIndex = NearestIndex,
+    AnchorScroll = AnchorScroll,
+    ApplyWheel = ApplyWheel,
+    OnTreeWheel = OnTreeWheel,
+    Drain = function()
+        local notches = wheelNotches
+        wheelNotches = 0
+        return notches
+    end,
+    Bounds = function() return ZOOM_MIN, ZOOM_MAX, ZOOM_STEP_RATIO end,
+    IconsHidden = function() return iconsHidden end,
+    IconThreshold = function() return ICON_HIDE_ZOOM end,
+}
