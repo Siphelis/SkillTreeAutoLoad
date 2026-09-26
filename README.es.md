@@ -25,6 +25,7 @@ devolverá cada nodo a su lugar. Dedica tu tiempo a jugar, no a repetir los mism
 - [🚀 Primeros pasos](#-primeros-pasos)
 - [🧭 El panel](#-el-panel)
 - [👁 Previsualizar un guardado](#-previsualizar-un-guardado)
+- [🔍 El zoom](#-el-zoom)
 - [🔄 Activar un guardado](#-activar-un-guardado)
 - [📂 Tus guardados](#-tus-guardados)
 - [💡 Conviene saber](#-conviene-saber)
@@ -51,29 +52,36 @@ la necesitas, incluidos todos los nodos y rangos.
 | 🖱 | **Recupera un guardado con un clic** — cada nodo se selecciona en el rango correcto |
 | ⚡ | **Elige una activación completa o progresiva para cada guardado** — espera al coste total o gasta ahora lo que tengas disponible |
 | 👁 | **Previsualiza un guardado directamente en el árbol** — los nodos que faltan se resaltan y encuadran al pasar el cursor |
+| 🔍 | **Haz zoom en el árbol con la rueda del ratón** — del 10 % al 250 %, centrado en el puntero |
 | 📊 | **Consulta el progreso de un vistazo** — cada fila se rellena según las Soul Ashes ya invertidas |
 | 📁 | **Organiza tus guardados en grupos** — renómbralos, muévelos o elimínalos fácilmente |
 | 💰 | **Consulta el coste en Soul Ashes en tiempo real** — la cantidad que falta aparece al pasar el cursor |
 | 🪟 | **Usa un panel compacto y plegable** — colócalo dentro del Skill Tree o junto a la ventana |
 | 👥 | **Usa tus guardados en toda la cuenta** — todos tus personajes comparten la misma lista |
-| 🌍 | **Disfruta de cuatro idiomas** — el addon sigue automáticamente el idioma del cliente |
+| 🔔 | **Entérate de las nuevas versiones** — un botón *Actualización disponible* te da el enlace de descarga |
+| 🌍 | **Disfruta de cuatro idiomas** — el addon sigue automáticamente el idioma del cliente, o cámbialo al instante con `/eapi lang` |
 
 ## 📋 Requisitos
 
 | | |
 |---|---|
 | **Juego** | World of Warcraft 3.3.5a en el servidor **Ebonhold** |
-| **Integración** | ProjectEbonhold, incluido con el cliente Ebonhold; no requiere ningún addon adicional |
+| **Integración** | ProjectEbonhold, incluido con el cliente Ebonhold |
+| **Addon requerido** | [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest), común a los addons de Ebonhold; SkillTreeAutoLoad no se carga sin él |
 
 ## 💾 Instalación
 
 1. Descarga el último archivo desde la [página de Releases](https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest).
 2. Extrae la carpeta `SkillTreeAutoLoad` dentro de `Interface/AddOns/` de tu cliente Ebonhold.
-3. Reinicia el juego y abre el Skill Tree: el panel aparece a su lado.
+   Instala [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest) de la misma forma si aún no está: es común a los
+   addons de Ebonhold, y SkillTreeAutoLoad no se carga sin él.
+3. Reinicia el juego y comprueba en la pantalla de selección de addons que
+   **SkillTreeAutoLoad** y **EbonAPI** están marcados.
+4. Abre el Skill Tree: el panel aparece a su lado.
 
 > [!IMPORTANT]
-> Tras la instalación, reinicia el juego por completo. Un simple `/reload` no basta, y tus
-> guardados no se conservarían.
+> Tras la instalación o una actualización, reinicia el juego por completo. Un simple `/reload`
+> no basta, y tus guardados no se conservarían.
 
 ## 🚀 Primeros pasos
 
@@ -82,10 +90,6 @@ la necesitas, incluidos todos los nodos y rangos.
 3. Cuando tengas que reconstruir el árbol, pulsa **Activar** junto al guardado: los nodos
    volverán a quedar como los habías guardado.
 4. Pulsa **Apply Changes** en ProjectEbonhold para enviar los cambios al servidor.
-
-> [!NOTE]
-> Abre el Skill Tree al menos una vez por sesión antes de activar un guardado. El addon necesita
-> leer primero su estado actual.
 
 ## 🧭 El panel
 
@@ -96,6 +100,7 @@ El panel se muestra y se oculta junto con la ventana del Skill Tree.
 | **`<>`** (arriba a la izquierda) | Mueve el panel al otro lado de la ventana. Su posición queda guardada. |
 | **`-` / `+`** (arriba a la izquierda) | Pliega el panel en una pestaña o vuelve a desplegarlo. |
 | **`...`** (arriba a la derecha) | Crea guardados o grupos y controla el modo compacto y el encuadre automático. |
+| **Actualización disponible** (arriba en el panel) | Aparece cuando se detecta una versión más reciente entre otros jugadores. Púlsalo y presiona **Ctrl+C** para copiar el enlace de descarga. |
 | **Cabecera de grupo** (clic derecho) | Permite renombrar o eliminar el grupo. Sus guardados vuelven a *Sin categoría*. |
 | **Activar** (en una fila) | Recupera el guardado en el árbol mostrado. |
 | **Progresivo · SÍ/NO** (en una fila) | Elige el modo de activación de ese guardado. El ajuste queda guardado. |
@@ -125,9 +130,16 @@ En modo completo, todos aparecen resaltados en ámbar. En modo progresivo, los n
 activar el siguiente clic aparecen en verde, mientras que los posteriores permanecen en ámbar.
 
 El addon desplaza y amplía suavemente la vista para encuadrar la parte relevante del árbol y
-restaura tu vista anterior cuando abandonas el panel. Unas flechas indican cuántos nodos del
-guardado permanecen fuera de la zona visible. Puedes desactivar el movimiento automático con
+restaura tu vista anterior cuando abandonas el panel. Unas flechas indican cuántos nodos que
+faltan permanecen fuera de la zona visible. Puedes desactivar el movimiento automático con
 **Encuadrar el árbol al pasar el cursor** en el menú del panel; los resaltados seguirán visibles.
+
+## 🔍 El zoom
+
+Gira la rueda del ratón sobre el Skill Tree para hacer zoom del **10 %** al **250 %** en
+pequeños pasos. El zoom se mantiene centrado en el puntero y el nivel actual aparece
+brevemente en la parte superior de la ventana. Por debajo del 50 %, se ocultan los iconos y los
+rangos de los nodos.
 
 ## 🔄 Activar un guardado
 
@@ -155,7 +167,7 @@ resultado.
 - 💰 **El coste se muestra de antemano.** En modo completo, el botón permanece atenuado mientras
   el saldo sea insuficiente; en modo progresivo, se habilita cuando se puede pagar al menos un
   rango.
-- 🔁 **Tu saldo de Soul Ashes se actualiza inmediatamente**, sin recargar la interfaz.
+- 🔁 **Tu saldo de Soul Ashes se actualiza inmediatamente.**
 
 ## 📂 Tus guardados
 
@@ -165,10 +177,6 @@ Si utilizabas una versión anterior a la 1.5, tus guardados estaban vinculados a
 Se transfieren automáticamente a la cuenta cuando ese personaje inicia sesión por primera vez.
 No se sobrescribe nada: los guardados idénticos se omiten y los que comparten nombre pero no
 contenido se añaden como `Nombre (Personaje)`.
-
-> [!NOTE]
-> Crear, renombrar, mover o eliminar un guardado recarga la interfaz. Es intencionado: el juego
-> escribe entonces los datos en el disco para protegerlos frente a un cierre inesperado.
 
 ## 💡 Conviene saber
 
@@ -182,25 +190,24 @@ contenido se añaden como `Nombre (Personaje)`.
   encuadrar ni activar hasta que estén disponibles en el árbol actual.
 - **Actualizar un guardado no puede reducirlo sin avisar.** Si el árbol actual contiene menos
   nodos que el guardado existente, el addon pide confirmación antes de reemplazarlo.
-- **No se comparte ni se exporta ningún dato.** Tus guardados permanecen en tu ordenador y no
-  se genera ningún código de build.
 
 ## 🧱 Anatomía del código
 
 ```
 SkillTreeAutoLoad/
-├── SkillTreeAutoLoad.toc   metadatos y orden de carga
-├── init.lua                espacio de nombres, colores, mensajes de chat
+├── SkillTreeAutoLoad.toc   metadatos, dependencia y orden de carga
+├── init.lua                espacio de nombres, colores, mensajes de chat, registro en EbonAPI
 ├── locales/                enUS · frFR · deDE · esES
 └── modules/
     ├── core.lua            lectura del árbol, cálculo del coste, aplicación de un guardado
     ├── plan.lua            cálculo del progreso y planificación de la activación progresiva
     ├── overlay.lua         marcadores de color sobre los nodos del Skill Tree
-    ├── view.lua            encuadre de la vista previa, transiciones y flechas fuera de pantalla
+    ├── view.lua            encuadre de la vista previa, transiciones, flechas fuera de pantalla y zoom con la rueda
     ├── data.lua            guardados, grupos, almacenamiento de cuenta y migración
-    ├── bridge.lua          diálogo con el servidor
+    ├── bridge.lua          diálogo con el servidor a través de EbonAPI
     ├── menus.lua           menús desplegables y ventanas emergentes
     ├── ui.lua              disposición del panel, filas y controles de activación
+    ├── update.lua          aviso de nueva versión
     └── main.lua            arranque
 ```
 
@@ -208,7 +215,12 @@ SkillTreeAutoLoad/
 
 🇬🇧 Inglés · 🇫🇷 Francés · 🇩🇪 Alemán · 🇪🇸 Español
 
-El addon sigue automáticamente el idioma de tu cliente de juego.
+El addon sigue automáticamente el idioma de tu cliente de juego (incluido el español
+latinoamericano).
+
+El idioma es común a todos los addons de Ebonhold que usan EbonAPI. Escribe `/eapi lang` para
+verlo o `/eapi lang <código>` (`enUS`, `frFR`, `deDE` o `esES`) para cambiarlo: el panel cambia
+al instante, sin recargar la interfaz, y tu elección se guarda.
 
 ## 📜 Licencia
 

@@ -26,6 +26,7 @@ jouer, pas à tout recliquer.
 - [🚀 Prise en main](#-prise-en-main)
 - [🧭 Le panneau](#-le-panneau)
 - [👁 Prévisualiser une sauvegarde](#-prévisualiser-une-sauvegarde)
+- [🔍 Le zoom](#-le-zoom)
 - [🔄 Activer une sauvegarde](#-activer-une-sauvegarde)
 - [📂 Vos sauvegardes](#-vos-sauvegardes)
 - [💡 Bon à savoir](#-bon-à-savoir)
@@ -52,29 +53,36 @@ SkillTreeAutoLoad enregistre l'arbre lorsqu'il vous convient, puis restaure cett
 | 🖱 | **Restaurez une sauvegarde en un clic** — chaque nœud est sélectionné au bon rang |
 | ⚡ | **Choisissez un mode complet ou progressif pour chaque sauvegarde** — attendez le coût total ou dépensez ce que vous pouvez immédiatement |
 | 👁 | **Prévisualisez une sauvegarde directement sur l'arbre** — les nœuds manquants sont surlignés et cadrés au survol |
+| 🔍 | **Zoomez sur l'arbre à la molette** — de 10 % à 250 %, centré sur le pointeur |
 | 📊 | **Suivez votre progression d'un coup d'œil** — chaque ligne se remplit selon les Soul Ashes déjà investies |
 | 📁 | **Classez vos sauvegardes par groupes** — renommez-les, déplacez-les ou supprimez-les facilement |
 | 💰 | **Suivez le coût en Soul Ashes en temps réel** — le montant manquant apparaît au survol |
 | 🪟 | **Utilisez un panneau compact et repliable** — placez-le dans le Skill Tree ou à côté de la fenêtre |
 | 👥 | **Retrouvez vos sauvegardes sur tout le compte** — tous vos personnages partagent la même liste |
-| 🌍 | **Profitez de quatre langues** — l'addon suit automatiquement celle de votre client |
+| 🔔 | **Soyez prévenu quand une nouvelle version sort** — un bouton *Mise à jour disponible* donne le lien de téléchargement |
+| 🌍 | **Profitez de quatre langues** — l'addon suit automatiquement celle de votre client, ou changez-la instantanément avec `/eapi lang` |
 
 ## 📋 Prérequis
 
 | | |
 |---|---|
 | **Jeu** | World of Warcraft 3.3.5a sur le serveur **Ebonhold** |
-| **Intégration** | ProjectEbonhold, inclus avec le client Ebonhold ; aucun addon supplémentaire requis |
+| **Intégration** | ProjectEbonhold, inclus avec le client Ebonhold |
+| **Addon requis** | [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest), commun aux addons Ebonhold ; SkillTreeAutoLoad ne se charge pas sans lui |
 
 ## 💾 Installation
 
 1. Téléchargez la dernière archive depuis la [page des Releases](https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest).
 2. Extrayez le dossier `SkillTreeAutoLoad` dans `Interface/AddOns/` de votre client Ebonhold.
-3. Relancez le jeu, puis ouvrez le Skill Tree : le panneau apparaît à côté.
+   Installez [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest) de la même façon s'il n'y est pas encore : il est
+   commun aux addons Ebonhold, et SkillTreeAutoLoad ne se charge pas sans lui.
+3. Relancez le jeu et vérifiez, sur l'écran de sélection des addons, que **SkillTreeAutoLoad**
+   et **EbonAPI** sont bien cochés.
+4. Ouvrez le Skill Tree : le panneau apparaît à côté.
 
 > [!IMPORTANT]
-> Après l'installation, relancez complètement le jeu. Un simple `/reload` ne suffit pas, et vos
-> sauvegardes ne seraient pas conservées.
+> Après l'installation ou une mise à jour, relancez complètement le jeu. Un simple `/reload` ne
+> suffit pas, et vos sauvegardes ne seraient pas conservées.
 
 ## 🚀 Prise en main
 
@@ -85,10 +93,6 @@ SkillTreeAutoLoad enregistre l'arbre lorsqu'il vous convient, puis restaure cett
    les nœuds seront replacés comme vous les aviez laissés.
 4. Cliquez sur **Apply Changes** dans ProjectEbonhold pour envoyer les changements au serveur.
 
-> [!NOTE]
-> Ouvrez le Skill Tree au moins une fois par session avant d'activer une sauvegarde. L'addon doit
-> d'abord lire son état actuel.
-
 ## 🧭 Le panneau
 
 Le panneau s'affiche et se masque avec la fenêtre du Skill Tree.
@@ -98,6 +102,7 @@ Le panneau s'affiche et se masque avec la fenêtre du Skill Tree.
 | **`<>`** (en haut à gauche) | Déplace le panneau de l'autre côté de la fenêtre. Sa position est mémorisée. |
 | **`-` / `+`** (en haut à gauche) | Replie le panneau sous forme d'onglet ou l'ouvre de nouveau. |
 | **`...`** (en haut à droite) | Crée une sauvegarde ou un groupe et règle le mode compact et le cadrage automatique. |
+| **Mise à jour disponible** (en haut du panneau) | Apparaît lorsqu'une version plus récente a été repérée chez d'autres joueurs. Cliquez dessus, puis appuyez sur **Ctrl+C** pour copier le lien de téléchargement. |
 | **En-tête de groupe** (clic droit) | Permet de renommer ou de supprimer le groupe. Ses sauvegardes retournent dans *Sans catégorie*. |
 | **Activer** (sur une ligne) | Replace la sauvegarde dans l'arbre affiché. |
 | **Progressif · OUI/NON** (sur une ligne) | Choisit le mode d'activation de cette sauvegarde. Le réglage est mémorisé. |
@@ -128,9 +133,15 @@ mode complet, ils apparaissent tous en ambre. En mode progressif, les nœuds que
 peut activer apparaissent en vert ; ceux qui devront attendre restent en ambre.
 
 L'addon déplace et ajuste progressivement la vue pour cadrer la partie utile de l'arbre, puis
-restaure votre vue lorsque vous quittez le panneau. Des flèches indiquent combien de nœuds de
-la sauvegarde se trouvent encore hors de l'écran. Vous pouvez désactiver le mouvement avec
+restaure votre vue lorsque vous quittez le panneau. Des flèches indiquent combien de nœuds
+manquants se trouvent encore hors de l'écran. Vous pouvez désactiver le mouvement avec
 **Cadrer l'arbre au survol** dans le menu du panneau ; le surlignage reste actif.
+
+## 🔍 Le zoom
+
+Faites défiler la molette de la souris sur le Skill Tree pour zoomer de **10 %** à **250 %** par
+petits paliers. Le zoom reste centré sur le pointeur, et le niveau actuel s'affiche brièvement
+en haut de la fenêtre. En dessous de 50 %, les icônes et les rangs des nœuds sont masqués.
 
 ## 🔄 Activer une sauvegarde
 
@@ -158,8 +169,7 @@ ProjectEbonhold pour confirmer le résultat.
 - 💰 **Le coût est indiqué à l'avance.** En mode complet, le bouton reste grisé tant que votre
   solde est insuffisant ; en mode progressif, il devient disponible dès qu'au moins un rang
   peut être payé.
-- 🔁 **Votre solde de Soul Ashes est mis à jour immédiatement**, sans rechargement de
-  l'interface.
+- 🔁 **Votre solde de Soul Ashes est mis à jour immédiatement.**
 
 ## 📂 Vos sauvegardes
 
@@ -170,11 +180,6 @@ chaque personnage. Elles sont transférées automatiquement vers le compte lors 
 connexion du personnage concerné. Rien n'est écrasé : une sauvegarde strictement identique est
 ignorée, tandis qu'une sauvegarde portant le même nom mais contenant un autre arbre est ajoutée
 sous la forme `Nom (Personnage)`.
-
-> [!NOTE]
-> La création, le renommage, le déplacement ou la suppression d'une sauvegarde recharge
-> l'interface. Ce comportement est volontaire : le jeu écrit alors vos sauvegardes sur le
-> disque afin de les protéger en cas de plantage.
 
 ## 💡 Bon à savoir
 
@@ -189,25 +194,24 @@ sous la forme `Nom (Personnage)`.
 - **La mise à jour d'une sauvegarde ne peut pas la réduire silencieusement.** Si l'arbre actuel
   contient moins de nœuds que la sauvegarde existante, l'addon demande une confirmation avant
   de la remplacer.
-- **Aucune donnée n'est partagée ni exportée.** Vos sauvegardes restent sur votre ordinateur ;
-  aucun code de build n'est généré.
 
 ## 🧱 Anatomie du code
 
 ```
 SkillTreeAutoLoad/
-├── SkillTreeAutoLoad.toc   métadonnées et ordre de chargement
-├── init.lua                espace de noms, couleurs, messages de chat
+├── SkillTreeAutoLoad.toc   métadonnées, dépendance et ordre de chargement
+├── init.lua                espace de noms, couleurs, messages de chat, inscription à EbonAPI
 ├── locales/                enUS · frFR · deDE · esES
 └── modules/
     ├── core.lua            lecture de l'arbre, calcul du coût, application d'une sauvegarde
     ├── plan.lua            calcul de la progression et planification de l'activation progressive
     ├── overlay.lua         marqueurs colorés sur les nœuds du Skill Tree
-    ├── view.lua            cadrage de l'aperçu, transitions de la vue et flèches hors écran
+    ├── view.lua            cadrage de l'aperçu, transitions, flèches hors écran et zoom à la molette
     ├── data.lua            sauvegardes, groupes, stockage compte et migration
-    ├── bridge.lua          dialogue avec le serveur
+    ├── bridge.lua          dialogue avec le serveur via EbonAPI
     ├── menus.lua           menus déroulants et popups
     ├── ui.lua              disposition du panneau, lignes et commandes d'activation
+    ├── update.lua          alerte de nouvelle version
     └── main.lua            démarrage
 ```
 
@@ -215,7 +219,11 @@ SkillTreeAutoLoad/
 
 🇬🇧 Anglais · 🇫🇷 Français · 🇩🇪 Allemand · 🇪🇸 Espagnol
 
-L'addon suit automatiquement la langue de votre client de jeu.
+L'addon suit automatiquement la langue de votre client de jeu (espagnol latino-américain inclus).
+
+La langue est commune à tous les addons Ebonhold qui utilisent EbonAPI. Tapez `/eapi lang` pour
+l'afficher, ou `/eapi lang <code>` (`enUS`, `frFR`, `deDE` ou `esES`) pour la changer : le
+panneau bascule aussitôt, sans rechargement de l'interface, et votre choix est mémorisé.
 
 ## 📜 Licence
 

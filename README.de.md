@@ -26,6 +26,7 @@ Spielen, nicht mit erneutem Anklicken.
 - [🚀 Schnelleinstieg](#-schnelleinstieg)
 - [🧭 Das Panel](#-das-panel)
 - [👁 Vorschau eines Speicherstands](#-vorschau-eines-speicherstands)
+- [🔍 Zoom im Baum](#-zoom-im-baum)
 - [🔄 Einen Speicherstand aktivieren](#-einen-speicherstand-aktivieren)
 - [📂 Eure Speicherstände](#-eure-speicherstände)
 - [💡 Gut zu wissen](#-gut-zu-wissen)
@@ -53,29 +54,36 @@ diese Konfiguration bei Bedarf wieder her — einschließlich aller Knoten und R
 | 🖱 | **Stellt einen Speicherstand mit einem Klick wieder her** — jeder Knoten landet im richtigen Rang |
 | ⚡ | **Wählt für jeden Speicherstand die vollständige oder schrittweise Aktivierung** — wartet auf die Gesamtkosten oder gebt sofort aus, was verfügbar ist |
 | 👁 | **Zeigt Speicherstände direkt im Baum an** — fehlende Knoten werden beim Überfahren markiert und eingerahmt |
+| 🔍 | **Zoomt mit dem Mausrad im Baum** — von 10 % bis 250 %, zentriert auf den Mauszeiger |
 | 📊 | **Erkennt den Fortschritt auf einen Blick** — jede Zeile füllt sich entsprechend den bereits investierten Soul Ashes |
 | 📁 | **Ordnet eure Speicherstände in Gruppen** — umbenennen, verschieben und löschen inklusive |
 | 💰 | **Seht die Kosten in Soul Ashes in Echtzeit** — der fehlende Betrag erscheint beim Überfahren |
 | 🪟 | **Nutzt ein kompaktes, einklappbares Panel** — platziert es im Skill Tree oder neben dem Fenster |
 | 👥 | **Nutzt eure Speicherstände accountweit** — alle Charaktere teilen dieselbe Liste |
-| 🌍 | **Spielt in vier Sprachen** — das Addon folgt automatisch eurem Spielclient |
+| 🔔 | **Erfahrt von neuen Versionen** — eine Schaltfläche *Update verfügbar* liefert den Download-Link |
+| 🌍 | **Spielt in vier Sprachen** — das Addon folgt automatisch eurem Spielclient, oder wechselt sofort mit `/eapi lang` |
 
 ## 📋 Voraussetzungen
 
 | | |
 |---|---|
 | **Spiel** | World of Warcraft 3.3.5a auf dem Server **Ebonhold** |
-| **Integration** | ProjectEbonhold, im Ebonhold-Client enthalten; kein zusätzliches Addon erforderlich |
+| **Integration** | ProjectEbonhold, im Ebonhold-Client enthalten |
+| **Erforderliches Addon** | [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest), gemeinsam für die Ebonhold-Addons; SkillTreeAutoLoad wird ohne es nicht geladen |
 
 ## 💾 Installation
 
 1. Ladet das neueste Archiv von der [Releases-Seite](https://github.com/Siphelis/SkillTreeAutoLoad/releases/latest) herunter.
 2. Entpackt den Ordner `SkillTreeAutoLoad` nach `Interface/AddOns/` eures Ebonhold-Clients.
-3. Startet das Spiel neu und öffnet den Skill Tree: das Panel erscheint daneben.
+   Installiert [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest) auf dieselbe Weise, falls es noch fehlt: es ist den
+   Ebonhold-Addons gemeinsam, und SkillTreeAutoLoad wird ohne es nicht geladen.
+3. Startet das Spiel neu und prüft im Addon-Auswahlbildschirm, dass **SkillTreeAutoLoad** und
+   **EbonAPI** angehakt sind.
+4. Öffnet den Skill Tree: das Panel erscheint daneben.
 
 > [!IMPORTANT]
-> Startet das Spiel nach der Installation vollständig neu. Ein einfaches `/reload` genügt
-> nicht, und eure Speicherstände würden nicht erhalten bleiben.
+> Startet das Spiel nach der Installation oder einem Update vollständig neu. Ein einfaches
+> `/reload` genügt nicht, und eure Speicherstände würden nicht erhalten bleiben.
 
 ## 🚀 Schnelleinstieg
 
@@ -86,10 +94,6 @@ diese Konfiguration bei Bedarf wieder her — einschließlich aller Knoten und R
    **Aktivieren**. Die Knoten werden so gesetzt, wie ihr sie gespeichert habt.
 4. Klickt in ProjectEbonhold auf **Apply Changes**, um die Änderungen an den Server zu senden.
 
-> [!NOTE]
-> Öffnet den Skill Tree mindestens einmal pro Sitzung, bevor ihr einen Speicherstand aktiviert.
-> Das Addon muss zuerst seinen aktuellen Zustand einlesen.
-
 ## 🧭 Das Panel
 
 Das Panel wird gemeinsam mit dem Skill-Tree-Fenster ein- und ausgeblendet.
@@ -99,6 +103,7 @@ Das Panel wird gemeinsam mit dem Skill-Tree-Fenster ein- und ausgeblendet.
 | **`<>`** (oben links) | Verschiebt das Panel auf die andere Seite des Fensters. Die Position wird gespeichert. |
 | **`-` / `+`** (oben links) | Klappt das Panel zu einer Lasche ein oder wieder aus. |
 | **`...`** (oben rechts) | Erstellt Speicherstände oder Gruppen und steuert Kompaktmodus und automatische Einrahmung. |
+| **Update verfügbar** (oben im Panel) | Erscheint, wenn bei anderen Spielern eine neuere Version entdeckt wurde. Klickt darauf und drückt **Strg+C**, um den Download-Link zu kopieren. |
 | **Gruppenkopf** (Rechtsklick) | Gruppe umbenennen oder löschen. Ihre Speicherstände kehren zu *Ohne Kategorie* zurück. |
 | **Aktivieren** (in einer Zeile) | Stellt den Speicherstand im angezeigten Baum wieder her. |
 | **Schrittweise · AN/AUS** (in einer Zeile) | Legt den Aktivierungsmodus dieses Speicherstands fest. Die Einstellung wird gespeichert. |
@@ -130,9 +135,15 @@ bernsteinfarben.
 
 Das Addon verschiebt und zoomt die Ansicht sanft zum relevanten Teil des Baums und stellt eure
 vorherige Ansicht wieder her, sobald ihr das Panel verlasst. Richtungspfeile zeigen, wie viele
-gespeicherte Knoten außerhalb des sichtbaren Bereichs liegen. Die automatische Bewegung lässt
+fehlende Knoten außerhalb des sichtbaren Bereichs liegen. Die automatische Bewegung lässt
 sich im Panel-Menü mit **Baum beim Überfahren einpassen** deaktivieren; die Markierungen bleiben
 weiterhin sichtbar.
+
+## 🔍 Zoom im Baum
+
+Scrollt mit dem Mausrad über den Skill Tree, um in kleinen Schritten von **10 %** bis **250 %**
+zu zoomen. Der Zoom bleibt auf den Mauszeiger zentriert, und die aktuelle Stufe erscheint kurz
+am oberen Fensterrand. Unter 50 % werden Knotensymbole und Rangzahlen ausgeblendet.
 
 ## 🔄 Einen Speicherstand aktivieren
 
@@ -161,7 +172,7 @@ bestätigen.
 - 💰 **Die Kosten werden im Voraus angezeigt.** Im vollständigen Modus bleibt die Schaltfläche
   ausgegraut, solange das Guthaben nicht ausreicht; im schrittweisen Modus wird sie aktiv,
   sobald mindestens ein Rang bezahlbar ist.
-- 🔁 **Euer Guthaben an Soul Ashes wird sofort aktualisiert**, ohne die Oberfläche neu zu laden.
+- 🔁 **Euer Guthaben an Soul Ashes wird sofort aktualisiert.**
 
 ## 📂 Eure Speicherstände
 
@@ -171,11 +182,6 @@ Wenn ihr eine Version vor 1.5 verwendet habt, waren eure alten Speicherstände a
 Charaktere gebunden. Beim ersten Login des jeweiligen Charakters werden sie automatisch in den
 Account übertragen. Dabei wird nichts überschrieben: Ein identischer Speicherstand wird
 übersprungen, ein gleichnamiger mit anderem Inhalt als `Name (Charakter)` hinzugefügt.
-
-> [!NOTE]
-> Beim Erstellen, Umbenennen, Verschieben oder Löschen eines Speicherstands wird die Oberfläche
-> neu geladen. Das ist beabsichtigt: Das Spiel schreibt die Daten dabei auf die Festplatte und
-> schützt sie so vor einem Absturz.
 
 ## 💡 Gut zu wissen
 
@@ -190,25 +196,24 @@ Account übertragen. Dabei wird nichts überschrieben: Ein identischer Speichers
 - **Beim Aktualisieren kann ein Speicherstand nicht unbemerkt kleiner werden.** Enthält der
   aktuelle Baum weniger Knoten als der vorhandene Speicherstand, fragt das Addon vor dem
   Ersetzen nach einer Bestätigung.
-- **Es werden keine Daten geteilt oder exportiert.** Eure Speicherstände bleiben auf eurem
-  Computer; es wird kein Build-Code erzeugt.
 
 ## 🧱 Aufbau des Codes
 
 ```
 SkillTreeAutoLoad/
-├── SkillTreeAutoLoad.toc   Metadaten und Ladereihenfolge
-├── init.lua                Namensraum, Farben, Chat-Ausgaben
+├── SkillTreeAutoLoad.toc   Metadaten, Abhängigkeit und Ladereihenfolge
+├── init.lua                Namensraum, Farben, Chat-Ausgaben, Anmeldung bei EbonAPI
 ├── locales/                enUS · frFR · deDE · esES
 └── modules/
     ├── core.lua            Baum lesen, Kosten planen, Speicherstand anwenden
     ├── plan.lua            Fortschrittsberechnung und Planung der schrittweisen Aktivierung
     ├── overlay.lua         farbige Knotenmarkierungen im Skill Tree
-    ├── view.lua            Vorschau, Kamerabewegungen und Pfeile für Knoten außerhalb der Ansicht
+    ├── view.lua            Vorschau, Kamerabewegungen, Pfeile für Knoten außerhalb der Ansicht und Mausrad-Zoom
     ├── data.lua            Speicherstände, Gruppen, Account-Ablage und Migration
-    ├── bridge.lua          Serverdialog
+    ├── bridge.lua          Serverdialog über EbonAPI
     ├── menus.lua           Dropdowns und Popups
     ├── ui.lua              Panelanordnung, Speicherstandzeilen und Aktivierungssteuerung
+    ├── update.lua          Hinweis auf neue Versionen
     └── main.lua            Start
 ```
 
@@ -216,7 +221,12 @@ SkillTreeAutoLoad/
 
 🇬🇧 Englisch · 🇫🇷 Französisch · 🇩🇪 Deutsch · 🇪🇸 Spanisch
 
-Das Addon folgt automatisch der Sprache eures Spielclients.
+Das Addon folgt automatisch der Sprache eures Spielclients (einschließlich lateinamerikanischem
+Spanisch).
+
+Die Sprache gilt für alle Ebonhold-Addons, die EbonAPI verwenden. Mit `/eapi lang` seht ihr sie,
+mit `/eapi lang <Code>` (`enUS`, `frFR`, `deDE` oder `esES`) ändert ihr sie: Das Panel wechselt
+sofort, ohne die Oberfläche neu zu laden, und eure Wahl wird gespeichert.
 
 ## 📜 Lizenz
 
