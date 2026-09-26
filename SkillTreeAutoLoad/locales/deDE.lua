@@ -1,6 +1,4 @@
-if GetLocale() ~= "deDE" then return end
-
-local L = SkillTreeAutoLoad.L
+local L = {}
 
 L.BTN_ACTIVATE = "Aktivieren"
 L.BTN_PANEL_MENU = "..."
@@ -72,14 +70,7 @@ L.MSG_MIGRATED = "Speicherstände von %s wurden in den Account übertragen: %d i
 
 L.MSG_INIT_FAILED = "Start fehlgeschlagen (%s): %s"
 L.MSG_ZOOM_FAILED = "Zoom-Fehler: %s. Der ursprüngliche Zoom des Skill Trees wurde wiederhergestellt."
-L.MSG_BRIDGE_ERROR = "Fehler bei der Serverkommunikation: %s"
-L.MSG_NO_OPCODE = "ProjectEbonhold.SS.SEND_LOADOUTS fehlt: Die Serverkommunikation ist deaktiviert."
-L.MSG_FOREIGN_PAYLOAD = "Servernachricht ignoriert: Sie stammt nicht vom eigenen Client (Absender: %s)."
-L.MSG_BAD_CHUNK = "Fehlerhafte Servernachricht ignoriert (Teil %s von %s)."
-L.MSG_INCOMPLETE_MESSAGE = "Unvollständige Servernachricht ignoriert."
 L.MSG_NO_LOADOUT_MATCH = "Keine Konfiguration entspricht der Serverankündigung: Es werden keine Änderungen vorgenommen."
-L.MSG_BAD_LOADOUT_IDENTITY = "Unbrauchbare Konfigurationskennung („%s“): Es werden keine Änderungen vorgenommen."
-L.MSG_BAD_BALANCE = "Unbrauchbares, vom Server gemeldetes Guthaben (%s / %s): Wert ignoriert."
 L.MSG_UNKNOWN_NODES = "%d dem Baum unbekannte Knoten wurden aus der Serverkonfiguration entfernt."
 L.MSG_NEGATIVE_BALANCE = "Das Guthaben würde unter null fallen (%s - %s): Stattdessen wird 0 eingetragen."
 L.MSG_PENDING_REMOVAL = "Ein Knoten wurde entfernt, ohne die Änderungen anzuwenden. Seine Erstattung ist nicht im Guthaben enthalten."
@@ -87,12 +78,13 @@ L.MSG_RANKS_FIXED = "%d ungültige Ränge in den Speicherständen wurden korrigi
 L.MSG_NODES_NOT_IN_TREE = "%d Knoten dieses Speicherstands fehlen im angezeigten Baum: Sie können weder angezeigt noch eingerahmt oder aktiviert werden."
 L.MSG_INVALID_NAME = "Dieser Name kann nicht verwendet werden. Es wurde nichts geändert."
 L.MSG_UPDATE_SHRINKS = "Der aktuelle Baum enthält weniger Knoten als der Speicherstand: %d statt %d."
-L.MSG_RELOADING = "Daten werden auf die Festplatte geschrieben… Benutzeroberfläche wird neu geladen."
+L.LABEL_ZOOM = "Zoom: %d %%"
+L.MSG_ACTIVATE_UNAVAILABLE = "Der Import des Talentbaums ist nicht verfügbar: „Aktivieren“ funktioniert erst, wenn ProjectEbonhold ihn bereitstellt."
 
 L.BTN_UPDATE = "Update verfügbar"
 L.TOOLTIP_UPDATE = "Version %s ist verfügbar. Klicken, um den Download-Link zu erhalten."
-L.MSG_UPDATE_AVAILABLE = "Version %s ist verfügbar (installiert: %s). Download:"
 L.POPUP_UPDATE = "SkillTreeAutoLoad %s ist verfügbar (installiert: %s).\nMit Strg+C den Download-Link kopieren."
+L.MSG_NO_EBONAPI = "EbonAPI 1.1 oder neuer wird benötigt: SkillTreeAutoLoad wurde nicht gestartet."
 
 L.ERR_NO_DATABASE = "TalentDatabase ist nicht verfügbar"
 L.ERR_NO_GRAPH = "der Baumgraph ist nicht verfügbar"
@@ -107,3 +99,5 @@ L.ERR_NO_IMPORT_POPUP = "Importfenster nicht verfügbar"
 L.ERR_IMPORT_REFUSED = "ProjectEbonhold lehnt den Import ab: %d Ränge bei %s verfügbaren Soul Ashes"
 L.ERR_REREAD_TREE = "der Baum konnte nicht erneut gelesen werden"
 L.ERR_MISMATCH = "der Baum entspricht nach dem Import nicht dem Speicherstand"
+
+EbonAPI.Locale.register("SkillTreeAutoLoad", { deDE = L })

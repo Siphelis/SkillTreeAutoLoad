@@ -1,7 +1,4 @@
-local locale = GetLocale()
-if locale ~= "esES" and locale ~= "esMX" then return end
-
-local L = SkillTreeAutoLoad.L
+local L = {}
 
 L.BTN_ACTIVATE = "Activar"
 L.BTN_PANEL_MENU = "..."
@@ -73,14 +70,7 @@ L.MSG_MIGRATED = "Transferencia a la cuenta de los guardados de %s — importado
 
 L.MSG_INIT_FAILED = "Error de inicio (%s): %s"
 L.MSG_ZOOM_FAILED = "Error de zoom: %s. Se ha restaurado el zoom original del Skill Tree."
-L.MSG_BRIDGE_ERROR = "Error de comunicación con el servidor: %s"
-L.MSG_NO_OPCODE = "Falta ProjectEbonhold.SS.SEND_LOADOUTS: la comunicación con el servidor está desactivada."
-L.MSG_FOREIGN_PAYLOAD = "Mensaje del servidor ignorado: no procede de tu propio cliente (remitente: %s)."
-L.MSG_BAD_CHUNK = "Mensaje del servidor mal formado ignorado (parte %s de %s)."
-L.MSG_INCOMPLETE_MESSAGE = "Mensaje incompleto del servidor ignorado."
 L.MSG_NO_LOADOUT_MATCH = "Ninguna configuración coincide con la anunciada por el servidor: no se aplicará ningún cambio."
-L.MSG_BAD_LOADOUT_IDENTITY = "Identificador de configuración no válido («%s»): no se aplicará ningún cambio."
-L.MSG_BAD_BALANCE = "Saldo anunciado por el servidor no válido (%s / %s): valor ignorado."
 L.MSG_UNKNOWN_NODES = "Se han eliminado de la configuración del servidor nodos desconocidos para el árbol. Total: %d."
 L.MSG_NEGATIVE_BALANCE = "El saldo quedaría por debajo de cero (%s - %s): se establecerá en 0."
 L.MSG_PENDING_REMOVAL = "Se ha retirado un nodo sin aplicar los cambios. Su reembolso no se incluye en el saldo."
@@ -88,12 +78,13 @@ L.MSG_RANKS_FIXED = "Se han corregido rangos no válidos en los guardados. Total
 L.MSG_NODES_NOT_IN_TREE = "Este guardado contiene nodos que no aparecen en el árbol mostrado. No se pueden mostrar, encuadrar ni activar. Total: %d."
 L.MSG_INVALID_NAME = "Este nombre no se puede utilizar. No se ha realizado ningún cambio."
 L.MSG_UPDATE_SHRINKS = "El árbol actual contiene menos nodos que el guardado: %d frente a %d."
-L.MSG_RELOADING = "Guardando los datos en el disco… Recargando la interfaz."
+L.LABEL_ZOOM = "Zoom: %d %%"
+L.MSG_ACTIVATE_UNAVAILABLE = "La importación del árbol no está disponible: «Activar» no funcionará hasta que ProjectEbonhold la proporcione."
 
 L.BTN_UPDATE = "Actualización disponible"
 L.TOOLTIP_UPDATE = "La versión %s está disponible. Haz clic para obtener el enlace de descarga."
-L.MSG_UPDATE_AVAILABLE = "La versión %s está disponible (instalada: %s). Descarga:"
 L.POPUP_UPDATE = "SkillTreeAutoLoad %s está disponible (instalada: %s).\nPulsa Ctrl+C para copiar el enlace de descarga."
+L.MSG_NO_EBONAPI = "Se requiere EbonAPI 1.1 o superior: SkillTreeAutoLoad no se ha iniciado."
 
 L.ERR_NO_DATABASE = "TalentDatabase no está disponible"
 L.ERR_NO_GRAPH = "el grafo del árbol no está disponible"
@@ -108,3 +99,5 @@ L.ERR_NO_IMPORT_POPUP = "la ventana de importación no está disponible"
 L.ERR_IMPORT_REFUSED = "ProjectEbonhold rechaza la importación: rangos solicitados: %d; saldo: %s Soul Ashes"
 L.ERR_REREAD_TREE = "no se ha podido volver a leer el árbol"
 L.ERR_MISMATCH = "el árbol no coincide con el guardado después de la importación"
+
+EbonAPI.Locale.register("SkillTreeAutoLoad", { esES = L })

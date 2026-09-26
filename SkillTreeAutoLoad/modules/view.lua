@@ -42,13 +42,6 @@ local function Clamp(value, low, high)
     return value
 end
 
-local debugging = false
-
-local function Diag(text, ...)
-    if not debugging then return end
-    NS.Log("|cff33ccff[diag]|r " .. string.format(text, ...))
-end
-
 local function TreeVisible()
     return _G.skillTreeScroll and _G.skillTreeCanvas and skillTreeScroll:IsVisible()
 end
@@ -251,7 +244,6 @@ end
 local function ComputeFraming(missing, affordable)
     local minX, minY, maxX, maxY = Bounds(missing)
     if not minX then
-        Diag("aucun noeud restant n'a de bouton dans l'arbre : rien a cadrer")
         return nil
     end
 
@@ -271,9 +263,6 @@ local function ComputeFraming(missing, affordable)
     end
 
     local zoom = math.max(SAFETY_MIN_ZOOM, math.min(origin.zoom, fit))
-
-    Diag("rectangle %.0f,%.0f -> %.0f,%.0f (%.0f x %.0f) | tient a %.2f | zoom joueur %.2f | zoom retenu %.2f",
-        minX, minY, maxX, maxY, maxX - minX, maxY - minY, fit, origin.zoom, zoom)
 
     return zoom, (minX + maxX) / 2, (minY + maxY) / 2
 end
@@ -368,6 +357,12 @@ local zoomLabelUntil
 
 local floor, log, GetCursorPosition = math.floor, math.log, GetCursorPosition
 
+local function LabelLadder()
+    for i = 1, ladderCount do
+        ladderLabels[i] = string.format(NS.L.LABEL_ZOOM, floor(ladder[i] * 100 + 0.5))
+    end
+end
+
 local function BuildLadder()
     if ladder then return end
 
@@ -381,9 +376,11 @@ local function BuildLadder()
 
     ladder[1], ladder[ladderCount] = ZOOM_MIN, ZOOM_MAX
 
-    for i = 1, ladderCount do
-        ladderLabels[i] = "Zoom: " .. floor(ladder[i] * 100 + 0.5) .. "%"
-    end
+    LabelLadder()
+end
+
+function View.Localize()
+    if ladder then LabelLadder() end
 end
 
 local function NearestIndex(zoom)
@@ -508,11 +505,6 @@ local function ShowMarks()
     local skipped = NS.Overlay.Show(target.missing, target.affordable)
     ShowArrows(target.missing)
 
-    local view = skillTreeScroll
-    Diag("pose : zoom %.2f | defilement %.0f,%.0f | recul %.0f,%.0f | sans bouton %d",
-        skillTreeCanvas:GetScale(), view:GetHorizontalScroll(), view:GetVerticalScroll(),
-        padX, padY, skipped or 0)
-
     if skipped and skipped > 0 and warnedKey ~= target.key then
         warnedKey = target.key
         NS.LogWarn(string.format(NS.L.MSG_NODES_NOT_IN_TREE, skipped))
@@ -535,9 +527,6 @@ local function StartAnimation(zoom, cx, cy, restore)
         startedAt = GetTime(), restore = restore, zoomedOut = zoomedOut,
         fromX = fromX, fromY = fromY, toZoom = zoom, toX = cx, toY = cy,
     }
-
-    Diag("transition zoom %.2f -> %.2f | centre %.0f,%.0f -> %.0f,%.0f | defilement %.0f -> %.0f | recul %.0f,%.0f",
-        fromZoom, zoom, fromX, fromY, cx, cy, startX, endX, padX, padY)
 
     HideArrows()
     NS.Overlay.Hide()
@@ -569,15 +558,6 @@ local function FinishRestore()
 end
 
 local function FrameTarget()
-    if debugging then
-        local total, framed = 0, 0
-        for nodeId in pairs(target.missing) do
-            total = total + 1
-            if NodeRect(nodeId) then framed = framed + 1 end
-        end
-        Diag("save %s : %d noeud(s) restant(s), %d avec bouton", tostring(target.key), total, framed)
-    end
-
     if not origin then
         local view, canvas = skillTreeScroll, skillTreeCanvas
         origin = {
@@ -600,7 +580,6 @@ local function FrameTarget()
     if math.abs(zoom - current) < 0.001
         and math.abs(cx - fromX) * zoom < 1 and math.abs(cy - fromY) * zoom < 1 then
         anim = nil
-        Diag("vue deja en place, aucun mouvement")
         ShowMarks()
         return
     end
@@ -691,12 +670,6 @@ function View.Attach(frame)
     panel = frame
 end
 
-SLASH_STALDIAG1 = "/staldiag"
-SlashCmdList["STALDIAG"] = function()
-    debugging = not debugging
-    NS.Log("diagnostic de l'apercu : " .. (debugging and "actif" or "eteint"))
-end
-
 function View.GetViewInsets()
     if not base then return nil end
     return base.frame, base.left, base.top, base.right, base.bottom
@@ -760,19 +733,3 @@ function View.Cancel()
 
     if driver then driver:Hide() end
 end
-
-View.__test = {
-    BuildLadder = function() BuildLadder() return ladder, ladderLabels, ladderCount end,
-    NearestIndex = NearestIndex,
-    AnchorScroll = AnchorScroll,
-    ApplyWheel = ApplyWheel,
-    OnTreeWheel = OnTreeWheel,
-    Drain = function()
-        local notches = wheelNotches
-        wheelNotches = 0
-        return notches
-    end,
-    Bounds = function() return ZOOM_MIN, ZOOM_MAX, ZOOM_STEP_RATIO end,
-    IconsHidden = function() return iconsHidden end,
-    IconThreshold = function() return ICON_HIDE_ZOOM end,
-}

@@ -25,7 +25,6 @@ local function EnsureShape(db)
     if not IsTable(db.groups) then db.groups = {} end
     if not IsTable(db.saves) then db.saves = {} end
     if not IsTable(db.imported) then db.imported = {} end
-    if not IsTable(db.update) then db.update = {} end
     if type(db.nextId) ~= "number" then db.nextId = 1 end
     return db
 end
@@ -277,11 +276,6 @@ local function DB()
     return EnsureShape(SkillTreeAutoLoadAccountDB)
 end
 
-function Data.Persist()
-    NS.Log(L.MSG_RELOADING)
-    ReloadUI()
-end
-
 function Data.CreateGroup(name)
     return CreateGroupIn(DB(), name)
 end
@@ -347,11 +341,6 @@ function Data.SetSaveProgressive(saveId, enabled)
     return true
 end
 
-function Data.IsSaveProgressive(saveId)
-    local save = DB().saves[saveId]
-    return (save and save.progressive) == true
-end
-
 function Data.MoveSaveToGroup(saveId, groupId)
     local save = DB().saves[saveId]
     if not save then return false end
@@ -410,6 +399,3 @@ function Data.IsPreviewCamera()
     return DB().settings.noPreviewCamera ~= true
 end
 
-function Data.GetUpdateState()
-    return DB().update
-end

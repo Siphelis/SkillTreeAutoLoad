@@ -145,10 +145,3 @@ function Overlay.Show(missing, affordable)
     parent:Show()
     return skipped
 end
-
-Overlay.__test = {
-    Container = function() return container end,
-    Marks = function() return marks, markList end,
-    ShownTint = function() return shownTint end,
-    Floor = function() return lastFloor, BASE_MIN, MARK_MIN_SIZE end,
-}

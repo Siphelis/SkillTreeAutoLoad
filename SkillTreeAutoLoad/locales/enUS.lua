@@ -1,6 +1,6 @@
 local NS = SkillTreeAutoLoad
 
-NS.L = {
+NS.L = EbonAPI.Locale.register("SkillTreeAutoLoad", { enUS = {
     BTN_ACTIVATE = "Activate",
     BTN_PANEL_MENU = "...",
     MENU_NEW_SAVE = "New save",
@@ -71,14 +71,7 @@ NS.L = {
 
     MSG_INIT_FAILED = "Startup failed (%s): %s",
     MSG_ZOOM_FAILED = "Zoom error: %s. The Skill Tree's own zoom has been restored.",
-    MSG_BRIDGE_ERROR = "Server communication error: %s",
-    MSG_NO_OPCODE = "ProjectEbonhold.SS.SEND_LOADOUTS is missing: server communication is disabled.",
-    MSG_FOREIGN_PAYLOAD = "Server message ignored: it did not come from your client (sender: %s).",
-    MSG_BAD_CHUNK = "Malformed server message ignored (part %s of %s).",
-    MSG_INCOMPLETE_MESSAGE = "Incomplete server message ignored.",
     MSG_NO_LOADOUT_MATCH = "No saved configuration matches the one announced by the server. No changes will be applied.",
-    MSG_BAD_LOADOUT_IDENTITY = "Invalid configuration identifier ('%s'). No changes will be applied.",
-    MSG_BAD_BALANCE = "The server reported an invalid balance (%s / %s). The value was ignored.",
     MSG_UNKNOWN_NODES = "Unknown nodes were removed from the configuration sent by the server. Total: %d.",
     MSG_NEGATIVE_BALANCE = "The balance would fall below zero (%s - %s). It has been set to 0 instead.",
     MSG_PENDING_REMOVAL = "A node was removed without applying the changes. Its refund is not included in the balance.",
@@ -86,12 +79,13 @@ NS.L = {
     MSG_NODES_NOT_IN_TREE = "This save contains nodes that are missing from the displayed tree. They cannot be shown, framed, or activated. Total: %d.",
     MSG_INVALID_NAME = "This name cannot be used. No changes were made.",
     MSG_UPDATE_SHRINKS = "The current tree contains fewer nodes than the save: %d versus %d.",
-    MSG_RELOADING = "Saving data to disk... Reloading the interface.",
+    LABEL_ZOOM = "Zoom: %d%%",
+    MSG_ACTIVATE_UNAVAILABLE = "The Skill Tree import is not available: 'Activate' will not work until ProjectEbonhold provides it.",
 
     BTN_UPDATE = "Update available",
     TOOLTIP_UPDATE = "Version %s is available. Click to get the download link.",
-    MSG_UPDATE_AVAILABLE = "Version %s is available (installed: %s). Download:",
     POPUP_UPDATE = "SkillTreeAutoLoad %s is available (installed: %s).\nPress Ctrl+C to copy the download link.",
+    MSG_NO_EBONAPI = "EbonAPI 1.1 or newer is required: SkillTreeAutoLoad did not start.",
 
     ERR_NO_DATABASE = "TalentDatabase unavailable",
     ERR_NO_GRAPH = "tree graph unavailable",
@@ -106,4 +100,4 @@ NS.L = {
     ERR_IMPORT_REFUSED = "ProjectEbonhold refused the import: requested ranks: %d; balance: %s Soul Ashes",
     ERR_REREAD_TREE = "unable to read the tree again",
     ERR_MISMATCH = "the tree does not match the save after import",
-}
+} })

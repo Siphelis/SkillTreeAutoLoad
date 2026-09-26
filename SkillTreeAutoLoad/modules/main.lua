@@ -10,6 +10,7 @@ local function Step(name, fn)
 end
 
 local frame = CreateFrame("Frame")
+if NS.api then NS.api:Track("Events", frame) end
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -25,11 +26,18 @@ frame:SetScript("OnEvent", function(_, event, name)
     end
 
     Step("Data", NS.Data.Init)
+    if not NS.api then
+        NS.LogError(NS.L.MSG_NO_EBONAPI)
+        return
+    end
     Step("Update", NS.Update.Init)
-    if not _G.skillTreeFrame then
+    if not EbonAPI.Ebonhold.SkillTreeFrame() then
         NS.LogError(NS.L.MSG_NO_PROJECTEBONHOLD)
         return
     end
     Step("Bridge", NS.Bridge.Init)
     Step("UI", NS.UI.Init)
+    if not NS.Core.CanActivate() then
+        NS.LogWarn(NS.L.MSG_ACTIVATE_UNAVAILABLE)
+    end
 end)

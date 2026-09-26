@@ -18,11 +18,12 @@ local scratch = {}
 
 local function GetNodeDefs()
     if nodeDefsById then return nodeDefsById end
-    if not (TalentDatabase and TalentDatabase[0] and TalentDatabase[0].nodes) then
+    local db = EbonAPI.Ebonhold.TalentDatabase()
+    if not db then
         return nil
     end
     nodeDefsById, spellCountById = {}, {}
-    for _, node in ipairs(TalentDatabase[0].nodes) do
+    for _, node in ipairs(db[0].nodes) do
         nodeDefsById[node.id] = node
         spellCountById[node.id] = node.spells and #node.spells or 0
     end
@@ -110,7 +111,7 @@ function Core.GetTreeSnapshot()
 
     local defs = GetNodeDefs()
     if not defs then return nil, L.ERR_NO_DATABASE end
-    if not _G.skillTreeFrame then return nil, L.ERR_TREE_NOT_READY end
+    if not EbonAPI.Ebonhold.SkillTreeFrame() then return nil, L.ERR_TREE_NOT_READY end
     if not TreeButtonsReady(defs) then return nil, L.ERR_TREE_NOT_READY end
 
     wipe(scratch)
@@ -160,7 +161,7 @@ function Core.CaptureTreeState()
 end
 
 local function ParseSoulAshes(text)
-    text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    text = EbonAPI.Lib.stripColor(text)
 
     local sign, numberPart = text:match("(%-?)([%d][%d%s,%.]*)%s*$")
     if not numberPart then return nil end
@@ -177,7 +178,7 @@ end
 local ashesText, ashesValue
 
 function Core.GetAvailableSoulAshes()
-    local frame = _G.skillTreeFrame
+    local frame = EbonAPI.Ebonhold.SkillTreeFrame()
     local fs = frame and frame.pointsText
     if not fs then return nil end
 
@@ -250,7 +251,7 @@ function Core.GetEffectiveSpendable()
     local effective = spendable - pendingCost
     if effective < 0 then
         NS.LogWarn(string.format(L.MSG_NEGATIVE_BALANCE,
-            NS.FormatCost(spendable), NS.FormatCost(pendingCost)))
+            EbonAPI.Format.number(spendable), EbonAPI.Format.number(pendingCost)))
         effective = 0
     end
 
@@ -258,7 +259,8 @@ function Core.GetEffectiveSpendable()
 end
 
 local function EncodeBuildCode(nodeRanks)
-    if not (utils and utils.EncodeVarInt and utils.Base64Encode) then return nil end
+    local utils = EbonAPI.Ebonhold.Utils()
+    if not utils then return nil end
 
     local list = {}
     for nodeId, rank in pairs(nodeRanks or {}) do
@@ -291,8 +293,14 @@ local function CountKnownRanks(defs, nodeRanks)
     return total
 end
 
+function Core.CanActivate()
+    local skillTree = EbonAPI.Ebonhold.SkillTree()
+
+    return EbonAPI.Ebonhold.Utils() ~= nil and skillTree ~= nil and skillTree.UpdateTotalSoulPoints ~= nil
+end
+
 local function RunNativeImport(code)
-    local button = _G.skillTreeImportButton
+    local button = EbonAPI.Ebonhold.SkillTreeImportButton()
     local onClick = button and button:GetScript("OnClick")
     if not onClick then return false, L.ERR_NO_IMPORT_BUTTON end
 
@@ -323,8 +331,8 @@ local function MergeInto(target, source)
 end
 
 function Core.ApplyBuild(saveNodeRanks)
-    local setSoulAshes = ProjectEbonhold and ProjectEbonhold.SkillTree
-        and ProjectEbonhold.SkillTree.UpdateTotalSoulPoints
+    local skillTree = EbonAPI.Ebonhold.SkillTree()
+    local setSoulAshes = skillTree and skillTree.UpdateTotalSoulPoints
     if not setSoulAshes then return nil, L.ERR_NO_SETTER end
 
     local defs = GetNodeDefs()
@@ -352,7 +360,7 @@ function Core.ApplyBuild(saveNodeRanks)
     local available = Core.GetAvailableSoulAshes()
     local rankTotal = CountKnownRanks(defs, target)
     if available and rankTotal > available then
-        return nil, string.format(L.ERR_IMPORT_REFUSED, rankTotal, NS.FormatCost(available))
+        return nil, string.format(L.ERR_IMPORT_REFUSED, rankTotal, EbonAPI.Format.number(available))
     end
 
     local code = EncodeBuildCode(target)

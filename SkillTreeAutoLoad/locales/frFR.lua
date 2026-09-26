@@ -1,6 +1,4 @@
-if GetLocale() ~= "frFR" then return end
-
-local L = SkillTreeAutoLoad.L
+local L = {}
 
 L.BTN_ACTIVATE = "Activer"
 L.BTN_PANEL_MENU = "..."
@@ -72,14 +70,7 @@ L.MSG_MIGRATED = "Transfert des sauvegardes de %s vers le compte — importées 
 
 L.MSG_INIT_FAILED = "Échec du démarrage (%s) : %s"
 L.MSG_ZOOM_FAILED = "Erreur de zoom : %s. Le zoom d'origine du Skill Tree a été rétabli."
-L.MSG_BRIDGE_ERROR = "Erreur de communication avec le serveur : %s"
-L.MSG_NO_OPCODE = "ProjectEbonhold.SS.SEND_LOADOUTS est absent : la communication avec le serveur est désactivée."
-L.MSG_FOREIGN_PAYLOAD = "Message serveur ignoré : il ne provient pas de votre propre client (expéditeur : %s)."
-L.MSG_BAD_CHUNK = "Message serveur mal formé ignoré (partie %s sur %s)."
-L.MSG_INCOMPLETE_MESSAGE = "Message serveur incomplet ignoré."
 L.MSG_NO_LOADOUT_MATCH = "Aucune configuration ne correspond à celle annoncée par le serveur : aucune modification ne sera appliquée."
-L.MSG_BAD_LOADOUT_IDENTITY = "Identifiant de configuration inutilisable (« %s ») : aucune modification ne sera appliquée."
-L.MSG_BAD_BALANCE = "Solde annoncé par le serveur inutilisable (%s / %s) : valeur ignorée."
 L.MSG_UNKNOWN_NODES = "Des nœuds inconnus ont été retirés de la configuration envoyée par le serveur. Total : %d."
 L.MSG_NEGATIVE_BALANCE = "Le solde deviendrait négatif (%s - %s) : il est ramené à 0."
 L.MSG_PENDING_REMOVAL = "Un nœud a été retiré sans que les changements soient appliqués. Son remboursement n'est pas inclus dans le solde."
@@ -87,12 +78,13 @@ L.MSG_RANKS_FIXED = "Des rangs hors limites ont été corrigés dans les sauvega
 L.MSG_NODES_NOT_IN_TREE = "Cette sauvegarde contient des nœuds absents de l'arbre affiché. Ils ne peuvent être ni affichés, ni cadrés, ni activés. Total : %d."
 L.MSG_INVALID_NAME = "Ce nom ne peut pas être utilisé. Aucune modification n'a été effectuée."
 L.MSG_UPDATE_SHRINKS = "L'arbre actuel contient moins de nœuds que la sauvegarde : %d contre %d."
-L.MSG_RELOADING = "Sauvegarde des données sur le disque… Rechargement de l'interface."
+L.LABEL_ZOOM = "Zoom : %d %%"
+L.MSG_ACTIVATE_UNAVAILABLE = "L'importation de l'arbre est indisponible : « Activer » ne fonctionnera pas tant que ProjectEbonhold ne la fournit pas."
 
 L.BTN_UPDATE = "Mise à jour disponible"
 L.TOOLTIP_UPDATE = "La version %s est disponible. Cliquez pour obtenir le lien de téléchargement."
-L.MSG_UPDATE_AVAILABLE = "La version %s est disponible (installée : %s). Téléchargement :"
 L.POPUP_UPDATE = "SkillTreeAutoLoad %s est disponible (installée : %s).\nCtrl+C pour copier le lien de téléchargement."
+L.MSG_NO_EBONAPI = "EbonAPI 1.1 ou plus récent est requis : SkillTreeAutoLoad n'a pas démarré."
 
 L.ERR_NO_DATABASE = "TalentDatabase est indisponible"
 L.ERR_NO_GRAPH = "le graphe de l'arbre est indisponible"
@@ -107,3 +99,5 @@ L.ERR_NO_IMPORT_POPUP = "fenêtre d'importation indisponible"
 L.ERR_IMPORT_REFUSED = "ProjectEbonhold refuse l'importation : rangs demandés : %d ; solde : %s Soul Ashes"
 L.ERR_REREAD_TREE = "impossible de relire l'arbre"
 L.ERR_MISMATCH = "après l'importation, l'arbre ne correspond pas à la sauvegarde"
+
+EbonAPI.Locale.register("SkillTreeAutoLoad", { frFR = L })

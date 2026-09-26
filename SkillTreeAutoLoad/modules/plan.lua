@@ -10,7 +10,8 @@ local EMPTY = {}
 local function BuildGraph()
     if parentsOf then return true end
 
-    local tree = TalentDatabase and TalentDatabase[0]
+    local db = EbonAPI.Ebonhold.TalentDatabase()
+    local tree = db and db[0]
     if not (tree and tree.nodes and tree.links) then return false end
 
     parentsOf, childrenOf, maxRankOf, costsOf, isStartNode = {}, {}, {}, {}, {}

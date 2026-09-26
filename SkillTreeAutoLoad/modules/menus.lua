@@ -9,7 +9,7 @@ NS.Menus = Menus
 local function CleanName(raw)
     if type(raw) ~= "string" then return nil end
 
-    local name = raw:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    local name = EbonAPI.Lib.stripColor(raw)
     name = name:gsub("[%c|]", " "):gsub("^%s+", ""):gsub("%s+$", "")
     if name == "" then return nil end
 
@@ -24,8 +24,6 @@ end
 
 StaticPopupDialogs["STAL_INPUT_TEXT"] = {
     text = "%s",
-    button1 = L.POPUP_OK,
-    button2 = L.POPUP_CANCEL,
     hasEditBox = true,
     maxLetters = 40,
     OnShow = function(self)
@@ -53,8 +51,6 @@ StaticPopupDialogs["STAL_INPUT_TEXT"] = {
 
 StaticPopupDialogs["STAL_CONFIRM"] = {
     text = "%s",
-    button1 = L.POPUP_YES,
-    button2 = L.POPUP_NO,
     OnAccept = function(self)
         local data = self.data
         if data and data.onAccept then data.onAccept() end
@@ -72,8 +68,6 @@ local function ResetLink(editBox)
 end
 
 StaticPopupDialogs["STAL_UPDATE_LINK"] = {
-    text = L.POPUP_UPDATE,
-    button1 = L.POPUP_OK,
     hasEditBox = true,
     hasWideEditBox = true,
     maxLetters = 0,
@@ -93,6 +87,17 @@ StaticPopupDialogs["STAL_UPDATE_LINK"] = {
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+function Menus.Localize()
+    local input, confirm, link =
+        StaticPopupDialogs["STAL_INPUT_TEXT"], StaticPopupDialogs["STAL_CONFIRM"], StaticPopupDialogs["STAL_UPDATE_LINK"]
+
+    input.button1, input.button2 = L.POPUP_OK, L.POPUP_CANCEL
+    confirm.button1, confirm.button2 = L.POPUP_YES, L.POPUP_NO
+    link.text, link.button1 = L.POPUP_UPDATE, L.POPUP_OK
+end
+
+Menus.Localize()
 
 function Menus.ShowUpdateLink()
     local version, installed = NS.Update.GetAvailable()
@@ -161,7 +166,7 @@ function Menus.ShowPanelMenu(anchor)
                 end
 
                 NS.Data.CreateSave(name, nil, nodeRanks)
-                NS.Data.Persist()
+                NS.UI.RefreshList()
             end)
         end)
 
@@ -173,7 +178,7 @@ function Menus.ShowPanelMenu(anchor)
                     return
                 end
                 NS.Data.CreateGroup(name)
-                NS.Data.Persist()
+                NS.UI.RefreshList()
             end)
         end)
 
@@ -204,7 +209,7 @@ function Menus.ShowSaveMenu(saveId, anchor)
                         NS.LogWarn(L.MSG_INVALID_NAME)
                         return
                     end
-                    if NS.Data.RenameSave(saveId, newName) then NS.Data.Persist() end
+                    if NS.Data.RenameSave(saveId, newName) then NS.UI.RefreshList() end
                 end)
             end)
 
@@ -222,7 +227,7 @@ function Menus.ShowSaveMenu(saveId, anchor)
 
                 local function apply()
                     if NS.Data.UpdateSaveContent(saveId, nodeRanks) then
-                        NS.Data.Persist()
+                        NS.UI.RefreshList()
                     end
                 end
 
@@ -240,7 +245,7 @@ function Menus.ShowSaveMenu(saveId, anchor)
             AddButton(level, Colorize(COLOR.ERROR, L.MENU_DELETE), function()
                 local save = NS.Data.GetSave(saveId)
                 Menus.Confirm(string.format(L.CONFIRM_DELETE_SAVE, save and save.name or saveId), function()
-                    if NS.Data.DeleteSave(saveId) then NS.Data.Persist() end
+                    if NS.Data.DeleteSave(saveId) then NS.UI.RefreshList() end
                 end)
             end)
 
@@ -249,7 +254,7 @@ function Menus.ShowSaveMenu(saveId, anchor)
                 return function()
                     CloseDropDownMenus()
                     if NS.Data.MoveSaveToGroup(saveId, groupId) then
-                        NS.Data.Persist()
+                        NS.UI.RefreshList()
                     end
                 end
             end
@@ -278,7 +283,7 @@ function Menus.ShowGroupMenu(groupId, anchor)
                     NS.LogWarn(L.MSG_INVALID_NAME)
                     return
                 end
-                if NS.Data.RenameGroup(groupId, newName) then NS.Data.Persist() end
+                if NS.Data.RenameGroup(groupId, newName) then NS.UI.RefreshList() end
             end)
         end)
 
@@ -286,7 +291,7 @@ function Menus.ShowGroupMenu(groupId, anchor)
             local group = NS.Data.GetGroup(groupId)
             Menus.Confirm(string.format(L.CONFIRM_DELETE_GROUP,
                 group and group.name or groupId, L.UNGROUPED), function()
-                if NS.Data.DeleteGroup(groupId) then NS.Data.Persist() end
+                if NS.Data.DeleteGroup(groupId) then NS.UI.RefreshList() end
             end)
         end)
     end, "MENU")

@@ -1,6 +1,6 @@
 local NS = SkillTreeAutoLoad
 local Log = NS.Log
-local FormatCost = NS.FormatCost
+local FormatCost = EbonAPI.Format.number
 local L = NS.L
 local COLOR = NS.COLOR
 local Colorize = NS.Colorize
@@ -26,12 +26,19 @@ local TOGGLE_LABEL_WIDTH = 62
 
 local ROW_WIDTH = PANEL_WIDTH - 12 - SCROLL_MARGIN_RIGHT - 4
 
-local TEXT_ON_ACTIVE = Colorize(COLOR.SUCCESS, L.BTN_ON)
-local TEXT_ON_DIM = Colorize(COLOR.DIM, L.BTN_ON)
-local TEXT_OFF_ACTIVE = Colorize(COLOR.HIGHLIGHT, L.BTN_OFF)
-local TEXT_OFF_DIM = Colorize(COLOR.DIM, L.BTN_OFF)
-local TEXT_READ_FAILED = Colorize(COLOR.ERROR, L.ROW_READ_FAILED)
-local TEXT_ACTIVE = Colorize(COLOR.SUCCESS, L.ROW_ACTIVE)
+local TEXT_ON_ACTIVE, TEXT_ON_DIM, TEXT_OFF_ACTIVE, TEXT_OFF_DIM, TEXT_READ_FAILED, TEXT_ACTIVE
+
+local function BuildTexts()
+    TEXT_ON_ACTIVE = Colorize(COLOR.SUCCESS, L.BTN_ON)
+    TEXT_ON_DIM = Colorize(COLOR.DIM, L.BTN_ON)
+    TEXT_OFF_ACTIVE = Colorize(COLOR.HIGHLIGHT, L.BTN_OFF)
+    TEXT_OFF_DIM = Colorize(COLOR.DIM, L.BTN_OFF)
+    TEXT_READ_FAILED = Colorize(COLOR.ERROR, L.ROW_READ_FAILED)
+    TEXT_ACTIVE = Colorize(COLOR.SUCCESS, L.ROW_ACTIVE)
+end
+
+BuildTexts()
+
 local NO_NODES = {}
 
 local panel, scroll, scrollChild, emptyText
@@ -358,14 +365,14 @@ local function AcquireRow(index)
     row.menuBtn = CreateFrame("Button", "STAL_Row" .. index .. "MenuBtn", row, "UIPanelButtonTemplate2")
     row.menuBtn:SetSize(24, 16)
     row.menuBtn:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 5)
-    row.menuBtn:SetText(L.BTN_MENU)
+    NS.api:Localized(row.menuBtn, "BTN_MENU")
     row.menuBtn.row = row
     row.menuBtn:SetScript("OnClick", OnRowMenuClick)
 
     row.activateBtn = CreateFrame("Button", "STAL_Row" .. index .. "ActivateBtn", row, "UIPanelButtonTemplate2")
     row.activateBtn:SetSize(62, 16)
     row.activateBtn:SetPoint("RIGHT", row.menuBtn, "LEFT", -2, 0)
-    row.activateBtn:SetText(L.BTN_ACTIVATE)
+    NS.api:Localized(row.activateBtn, "BTN_ACTIVATE")
     row.activateBtn.row = row
     row.activateBtn:SetScript("OnClick", OnActivateClick)
 
@@ -385,7 +392,7 @@ local function AcquireRow(index)
     row.progLabel:SetWidth(TOGGLE_LABEL_WIDTH)
     row.progLabel:SetJustifyH("LEFT")
     row.progLabel:SetPoint("RIGHT", row.onBtn, "LEFT", -4, 0)
-    row.progLabel:SetText(L.ROW_PROGRESSIVE)
+    NS.api:Localized(row.progLabel, "ROW_PROGRESSIVE")
 
     row:SetPoint("RIGHT", scrollChild, "RIGHT", -2, 0)
     row:SetScript("OnEnter", ShowRowTooltip)
@@ -782,7 +789,7 @@ local function CreateHeaderButtons()
     sideBtn = CreateFrame("Button", "STAL_SideBtn", panel, "UIPanelButtonTemplate2")
     sideBtn:SetSize(28, 20)
     sideBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -8)
-    sideBtn:SetText(L.BTN_SIDE)
+    NS.api:Localized(sideBtn, "BTN_SIDE")
     sideBtn:SetScript("OnClick", function()
         NS.Data.SetPanelSide((NS.Data.GetPanelSide() == "RIGHT") and "LEFT" or "RIGHT")
         ApplyLayout()
@@ -799,7 +806,7 @@ local function CreateHeaderButtons()
     menuBtn = CreateFrame("Button", "STAL_PanelMenuBtn", panel, "UIPanelButtonTemplate2")
     menuBtn:SetSize(28, 20)
     menuBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -8)
-    menuBtn:SetText(L.BTN_PANEL_MENU)
+    NS.api:Localized(menuBtn, "BTN_PANEL_MENU")
     menuBtn:SetScript("OnClick", function(self)
         NS.Menus.ShowPanelMenu(self)
     end)
@@ -848,7 +855,7 @@ local function CreateScrollArea()
     emptyText = scroll:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     emptyText:SetPoint("TOP", scroll, "TOP", 0, -10)
     emptyText:SetWidth(PANEL_WIDTH - 30)
-    emptyText:SetText(L.EMPTY_LIST)
+    NS.api:Localized(emptyText, "EMPTY_LIST")
 end
 
 local function BuildPanel()
@@ -985,6 +992,20 @@ local function QueueRefresh()
     refreshDriver:Show()
 end
 
+local function OnLanguageChanged()
+    BuildTexts()
+    for i = 1, #rowPool do rowPool[i].modeLast = nil end
+
+    NS.Menus.Localize()
+    NS.View.Localize()
+
+    if not panel then return end
+
+    updateBtn:SetText(Colorize(COLOR.WARN, L.BTN_UPDATE))
+    ApplyLayout()
+    UI.RefreshList()
+end
+
 local function InstallWatch()
     if type(_G.refreshAccessibility) ~= "function" then return end
 
@@ -999,24 +1020,10 @@ function UI.Init()
     if not _G.skillTreeFrame then return end
 
     InstallWatch()
+    NS.api:On("LANGUAGE_CHANGED", OnLanguageChanged)
     skillTreeFrame:HookScript("OnShow", ShowPanel)
     skillTreeFrame:HookScript("OnHide", HidePanel)
     NS.View.Init()
 
     if skillTreeFrame:IsVisible() then ShowPanel() end
 end
-
-UI.__test = {
-    Tick = TickPrewarm,
-    Fire = FirePrewarm,
-    Driver = function() return prewarmDriver end,
-    State = function() return prewarming, prewarmDone end,
-    Reset = function()
-        prewarming, prewarmDone = nil, nil
-        if prewarmDriver then prewarmDriver:Hide() end
-    end,
-    Delays = function() return PREWARM_DELAY end,
-    Watch = function() return watched, refreshQueued, refreshDriver end,
-    Queue = QueueRefresh,
-    Pools = function() return headerPool, rowPool end,
-}
