@@ -78,7 +78,7 @@ diese Konfiguration bei Bedarf wieder her — einschließlich aller Knoten und R
    Installiert [**EbonAPI**](https://github.com/Siphelis/EbonAPI/releases/latest) auf dieselbe Weise, falls es noch fehlt: es ist den
    Ebonhold-Addons gemeinsam, und SkillTreeAutoLoad wird ohne es nicht geladen.
 3. Startet das Spiel neu und prüft im Addon-Auswahlbildschirm, dass **SkillTreeAutoLoad** und
-   **EbonAPI** angehakt sind.
+   [**EbonAPI**](https://github.com/Siphelis/EbonAPI) angehakt sind.
 4. Öffnet den Skill Tree: das Panel erscheint daneben.
 
 > [!IMPORTANT]
@@ -224,7 +224,7 @@ SkillTreeAutoLoad/
 Das Addon folgt automatisch der Sprache eures Spielclients (einschließlich lateinamerikanischem
 Spanisch).
 
-Die Sprache gilt für alle Ebonhold-Addons, die EbonAPI verwenden. Mit `/eapi lang` seht ihr sie,
+Die Sprache gilt für alle Ebonhold-Addons, die [EbonAPI](https://github.com/Siphelis/EbonAPI) verwenden. Mit `/eapi lang` seht ihr sie,
 mit `/eapi lang <Code>` (`enUS`, `frFR`, `deDE` oder `esES`) ändert ihr sie: Das Panel wechselt
 sofort, ohne die Oberfläche neu zu laden, und eure Wahl wird gespeichert.
 
